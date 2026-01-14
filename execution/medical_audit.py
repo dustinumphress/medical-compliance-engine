@@ -230,7 +230,7 @@ def audit_medical_record(raw_text, cpt_data, diagnosis_codes):
     logger.info(f"Step 2: Auditing CPTs {cpt_codes} against documentation...")
     logger.debug(f"Definitions:\n{cpt_context}")
     
-    system_prompt = "You are an EXPERT Medical Quality Auditor known for precision and strict adherence to CPT guidelines."
+    system_prompt = "You are an EXPERT Medical Quality Auditor known for precision and strict adherence to CPT guidelines. You also validate ICD-10 Diagnosis specificity."
     
     # --- DB Rules Check ---
     db = CodingRulesDB()
@@ -284,7 +284,8 @@ def audit_medical_record(raw_text, cpt_data, diagnosis_codes):
     
     INPUT DATA:
     - CPT Codes: {cpt_codes}
-    - Billed Units: {json.dumps(units_map)} (The user is attempting to bill these amounts)
+    - Billed Units: {json.dumps(units_map)}
+    - Diagnosis Codes: {diagnosis_codes}
     - CPT Definitions: {cpt_context}
     - SYSTEM ALERTS (These are FACTUAL database checks. Do not dispute them. explain them):
       {risk_context_str if risk_context_str else "None."}
@@ -304,6 +305,11 @@ def audit_medical_record(raw_text, cpt_data, diagnosis_codes):
     - Apply the SYSTEM ALERTS provided above. Use the exact rationale provided in SYSTEM ALERTS.
     - If a code has a SYSTEM ALERT, its 'billing_risk_alert' MUST MATCH calculation.
     
+    STEP 3: DIAGNOSIS VALIDATION
+    - Analyze the provided Diagnosis Codes.
+    - FLAG any 'Unspecified' codes (e.g. unspecified side, unspecified site) as non-optimal if the text supports a specific one.
+    - CRITICAL: Flag vaguely defined 'Encounter for' Z-codes (like Z42.8) if they are the PRIMARY diagnosis. This is often a denial trigger.
+    
     OUTPUT FORMAT (JSON ONLY):
     Respond strictly in this JSON structure:
     
@@ -318,6 +324,7 @@ def audit_medical_record(raw_text, cpt_data, diagnosis_codes):
                 "risk_rationale": "Clear explanation. If Risk exists, use the human-readable explanation from SYSTEM ALERTS."
             }}
         ],
+        "diagnosis_analysis": "A short summary paragraph validating the diagnosis codes. Mention specific codes that are vague or unspecified.",
         "documentation_improvement": "Advice string"
     }}
     """

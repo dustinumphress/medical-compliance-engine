@@ -63,8 +63,8 @@ def sanitize_text(text):
                                ])
     
     # Filter for reasonable score
-    # Presidio sometimes has low confidence FP
-    results = [r for r in results if r.score >= 0.4]
+    # Presidio sometimes has low confidence FP. Lowered to 0.35 per user request to catch more edge cases.
+    results = [r for r in results if r.score >= 0.35]
 
     # Anonymize
     # Replace with <ENTITY_TYPE>

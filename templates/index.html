@@ -37,15 +37,21 @@
                     </div>
                 </div>
 
-                <button id="btn-review" class="btn-primary" onclick="startReview()">Review & Audit</button>
+                <div class="actions">
+                    <button id="btn-reset" class="btn-secondary" onclick="resetForm()">Reset</button>
+                    <button id="btn-review" class="btn-primary" onclick="startReview()">Review & Audit</button>
+                </div>
             </section>
 
             <!-- Results Section (Hidden initially) -->
             <section id="results-section" class="card results-section hidden">
                 <h2>Audit Results</h2>
+                <div id="dx-analysis-container"></div>
+                <h2>Audit Results</h2>
                 <div id="audit-table-container"></div>
                 <div id="loading" class="hidden">
-                    <div class="spinner"></div> Auditing with Agent...
+                    <div class="spinner"></div>
+                    <span id="loading-text" class="loading-text">Initializing Agent...</span>
                 </div>
             </section>
         </main>
@@ -64,7 +70,7 @@
                     </div>
                     <div class="panel sanitized-panel">
                         <h3>Sanitized Preview (Agent View)</h3>
-                        <div id="sanitized-view" class="paper-view readonly"></div>
+                        <div id="sanitized-view" class="paper-view" contenteditable="true"></div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -143,7 +149,10 @@
         async function confirmAndAudit() {
             closeModal();
             document.getElementById('results-section').classList.remove('hidden');
+            document.getElementById('results-section').classList.remove('hidden');
             document.getElementById('loading').classList.remove('hidden');
+            startLoadingAnimation(); // Start verbose status updates
+            document.getElementById('audit-table-container').innerHTML = "";
             document.getElementById('audit-table-container').innerHTML = "";
 
             // Gather Codes
@@ -165,7 +174,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        text: currentSanitizedText,
+                        text: document.getElementById('sanitized-view').innerText, // Use the manually edited text
                         cpt_codes: cptData, // Send objects now
                         dx_codes: dxInputs
                     })
@@ -175,6 +184,7 @@
             } catch (e) {
                 document.getElementById('audit-table-container').innerHTML = `<p class="error">Error: ${e}</p>`;
             } finally {
+                stopLoadingAnimation();
                 document.getElementById('loading').classList.add('hidden');
             }
         }
@@ -234,6 +244,62 @@
             }
 
             document.getElementById('audit-table-container').innerHTML = html;
+
+            if (data.diagnosis_analysis) {
+                const dxHtml = `
+                    <div class="diagnosis-block">
+                        <h3>Diagnosis Analysis</h3>
+                        <p>${data.diagnosis_analysis.replace(/\n/g, '<br>')}</p>
+                    </div>
+                `;
+                document.getElementById('dx-analysis-container').innerHTML = dxHtml;
+            }
+        }
+
+        function resetForm() {
+            if (!confirm("Are you sure you want to reset all data?")) return;
+
+            document.getElementById('op-report').value = "";
+            document.querySelectorAll('.cpt-code').forEach(i => i.value = "");
+            document.querySelectorAll('.cpt-units').forEach(i => i.value = "1");
+            document.querySelectorAll('.dx').forEach(i => i.value = "");
+
+
+            document.getElementById('results-section').classList.add('hidden');
+            document.getElementById('audit-table-container').innerHTML = "";
+            document.getElementById('dx-analysis-container').innerHTML = "";
+            currentSanitizedText = "";
+        }
+
+        // --- Verbose Loading Animation ---
+        let loadingInterval;
+        const loadingMessages = [
+            "🚀 Initializing secure environment...",
+            "🔒 Redacting PHI from clinical text...",
+            "📚 Loading 2026 NCCI Bundling Edits...",
+            "🔍 Cross-referencing Billing Rules...",
+            "🧠 Analyzing Medical Necessity (Claude 4.5)...",
+            "🩺 Validating Diagnosis Code Specificity...",
+            "🤖 Synthesizing Clinical Rationale...",
+            "✨ Formatting Final Output..."
+        ];
+
+        function startLoadingAnimation() {
+            const textEl = document.getElementById('loading-text');
+            textEl.innerText = loadingMessages[0];
+            let index = 1;
+
+            loadingInterval = setInterval(() => {
+                if (index < loadingMessages.length) {
+                    textEl.innerText = loadingMessages[index];
+                    index++;
+                }
+            }, 1500); // Update every 1.5 seconds
+        }
+
+        function stopLoadingAnimation() {
+            clearInterval(loadingInterval);
+            document.getElementById('loading-text').innerText = "Process Complete.";
         }
     </script>
 </body>
