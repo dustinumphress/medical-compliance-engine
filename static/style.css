@@ -173,14 +173,17 @@ textarea {
     line-height: 1.5;
     border-radius: 4px;
     border: 1px solid var(--border);
-    color: var(--text-primary); /* Ensure text is visible on dark background */
+    color: var(--text-primary);
+    /* Ensure text is visible on dark background */
 }
 
 /* Editable View Specifics */
 .paper-view[contenteditable="true"] {
-    background: #000; /* Keep it dark */
+    background: #000;
+    /* Keep it dark */
     cursor: text;
-    border: 1px dashed var(--accent); /* Dotted border to suggest editability */
+    border: 1px dashed var(--accent);
+    /* Dotted border to suggest editability */
     transition: border 0.2s, box-shadow 0.2s;
 }
 
@@ -269,4 +272,71 @@ mark.phi-match {
     background: rgba(245, 158, 11, 0.05);
     padding: 8px;
     border-radius: 4px;
+}
+
+/* Chat Interface */
+#chat-section {
+    margin-top: 30px;
+    border-top: 1px solid var(--border);
+    padding-top: 20px;
+}
+
+.chat-box {
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    height: 300px;
+    overflow-y: auto;
+    padding: 15px;
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.chat-message {
+    max-width: 80%;
+    padding: 10px 15px;
+    border-radius: 12px;
+    line-height: 1.4;
+    font-size: 0.95em;
+}
+
+.chat-message.user {
+    align-self: flex-end;
+    background: var(--accent);
+    color: white;
+    border-bottom-right-radius: 2px;
+}
+
+.chat-message.agent {
+    align-self: flex-start;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 2px;
+}
+
+.chat-input-area {
+    display: flex;
+    gap: 10px;
+}
+
+.chat-input-area input {
+    flex: 1;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: white;
+    padding: 12px;
+    border-radius: 6px;
+}
+
+.chat-input-area button {
+    background: var(--success);
+    color: white;
+    border: none;
+    padding: 0 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
 }

@@ -22,14 +22,14 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-MODEL_NAME = "claude-sonnet-4-5-20250929" # Fallback to known stable version if latest fails 
+MODEL_NAME = "claude-sonnet-4-5-20250929" # Correct stable version 
 
 def query_anthropic(prompt, system_prompt):
     if not ANTHROPIC_API_KEY:
         logger.error("ANTHROPIC_API_KEY not found in .env file.")
         return None
         
-    logger.debug(f"Loaded API Key: {ANTHROPIC_API_KEY[:10]}... (Length: {len(ANTHROPIC_API_KEY)})")
+    logger.debug(f"Loaded API Key: {ANTHROPIC_API_KEY[:4]}... (Length: {len(ANTHROPIC_API_KEY)})")
     
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     
@@ -184,20 +184,15 @@ def audit_medical_record(raw_text, cpt_data, diagnosis_codes):
     
     # Normalize Inputs
     cpt_list = [] # Just codes for LLM
-    units_map = {} # Code -> User Units
-    
-    if cpt_data and isinstance(cpt_data[0], dict):
-        for item in cpt_data:
-            c = item['code']
-            cpt_list.append(c)
-            units_map[c] = item.get('user_units', 1)
-    else:
-        # Legacy support
-        if isinstance(cpt_data, str): cpt_data = [cpt_data]
-        cpt_list = cpt_data
-        for c in cpt_list:
-            units_map[c] = 1
-
+def audit_medical_record(raw_text, cpt_list, diagnosis_codes, units_map=None):
+    """
+    Main orchestration function.
+    1. Sanitizes Text
+    2. Checks DB Rules (NCCI / MUE)
+    3. Prompts Claude (Agent)
+    """
+    # Normalize input
+    if isinstance(cpt_list, str): cpt_list = [cpt_list]
     cpt_codes = cpt_list # Use this for rest of function
     
     if isinstance(diagnosis_codes, str): diagnosis_codes = [diagnosis_codes]
@@ -248,7 +243,11 @@ def audit_medical_record(raw_text, cpt_data, diagnosis_codes):
 
     # 2. MUE Checks (Verify User Billing Units vs Limits)
     for code in cpt_codes:
-        user_units = units_map.get(code, 1)
+        # Determine user units (default to 1 if not provided)
+        user_units = 1
+        if units_map and code in units_map:
+            user_units = units_map[code]
+            
         mue_finding = db.check_mue(code, user_units)
         
         if mue_finding:
@@ -458,6 +457,48 @@ def print_human_readable_result(result):
     if improvement and improvement != "N/A":
         print("\nDOCUMENTATION IMPROVEMENT:")
         print(improvement)
+
+def consult_auditor(context_text, audit_results, question):
+    """
+    Follow-up chat with the Auditor Agent.
+    """
+    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+    
+    # Construct context from the previous audit
+    # We want the agent to know what it previously decided.
+    audit_summary = json.dumps(audit_results, indent=2)
+    
+    system_prompt = "You are an Expert Medical Auditor Consultant. You have just audited a clinical note. The user has follow-up questions. Answer briefly and professionally based strictly on the text and coding rules."
+    
+    user_prompt = f"""
+    CONTEXT - CLINICAL NOTE:
+    \"\"\"
+    {context_text}
+    \"\"\"
+    
+    CONTEXT - YOUR PREVIOUS AUDIT FINDINGS:
+    {audit_summary}
+    
+    USER QUESTION:
+    {question}
+    
+    Provide a helpful, evidence-based answer.
+    """
+    
+    try:
+        message = client.messages.create(
+            model=MODEL_NAME,
+            max_tokens=500,
+            temperature=0.5,
+            system=system_prompt,
+            messages=[
+                {"role": "user", "content": user_prompt}
+            ]
+        )
+        return {"answer": message.content[0].text}
+    except Exception as e:
+        logger.error(f"Chat Error: {e}")
+        return {"error": str(e)}
 
 if __name__ == "__main__":
     import argparse

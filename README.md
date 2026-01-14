@@ -13,7 +13,11 @@ A comprehensive, AI-powered medical coding audit system designed to verify CPT c
     *   **Local PHI Redaction**: Microsoft Presidio runs LOCALLY to redact Patient Names, MRNs, Dates, and other identifiers *before* data leaves your machine.
     *   **Redaction Viewer**: Review and approve sanitized text in the UI before submission.
 *   **Interactive Web UI**: Clean, dark-mode Flask application for easy data entry (Calculated vs. Billed Units display).
+    *   **NEW: Interactive Chat**: Ask follow-up questions to the "Auditor Agent" about specific denials or coding advice.
+    *   **Rich Formatting**: Results and advice are formatted for readability (bolding, lists, etc.).
 *   **Production Ready**: Includes `Dockerfile` for easy deployment, comprehensive logging, and automated test suite.
+
+![Medical Audit Dashboard](docs/dashboard_screenshot.png)
 
 ## 🛠️ Architecture
 
@@ -107,9 +111,15 @@ python execution/ingest_coding_rules.py
 
 1.  **Start the Web Application**:
     ```bash
+    .\run_app.ps1
+    ```
+    *(Recommended for Windows users - handles Docker build and run automatically)*
+
+    **Manual Python:**
+    ```bash
     python app.py
     ```
-    **OR** via Docker:
+    **Manual Docker:**
     ```bash
     docker run --env-file .env -p 5000:5000 medical-audit
     ```
@@ -120,6 +130,10 @@ python execution/ingest_coding_rules.py
     *   Enter **CPT Codes** and **Units**.
     *   Click **"Review Redaction"** to see what the AI will see.
     *   Click **"Run Audit"** to get results.
+4.  **Ask Follow-Up Questions**:
+    *   Use the Chat interface at the bottom to ask for clarification (e.g., *"Why was 14301 denied?"*).
+
+![Audit Result Example](docs/audit_result_example.png)
 
 ## 📊 Logic Flow
 

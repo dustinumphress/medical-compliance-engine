@@ -47,8 +47,26 @@
             <section id="results-section" class="card results-section hidden">
                 <h2>Audit Results</h2>
                 <div id="dx-analysis-container"></div>
-                <h2>Audit Results</h2>
+
+
                 <div id="audit-table-container"></div>
+
+                <!-- Chat Section (Moved) -->
+                <div id="chat-section" class="hidden">
+                    <h3>💬 Ask the Auditor</h3>
+                    <div id="chat-box" class="chat-box">
+                        <div class="chat-message agent">
+                            <strong>Auditor:</strong> I've reviewed your case. Do you have any questions about the
+                            findings?
+                        </div>
+                    </div>
+                    <div class="chat-input-area">
+                        <input type="text" id="chat-input"
+                            placeholder="Ask a question (e.g., 'Why was code 14301 denied?')..."
+                            onkeypress="handleChatKey(event)">
+                        <button onclick="sendQuestion()">Send</button>
+                    </div>
+                </div>
                 <div id="loading" class="hidden">
                     <div class="spinner"></div>
                     <span id="loading-text" class="loading-text">Initializing Agent...</span>
@@ -149,10 +167,8 @@
         async function confirmAndAudit() {
             closeModal();
             document.getElementById('results-section').classList.remove('hidden');
-            document.getElementById('results-section').classList.remove('hidden');
             document.getElementById('loading').classList.remove('hidden');
             startLoadingAnimation(); // Start verbose status updates
-            document.getElementById('audit-table-container').innerHTML = "";
             document.getElementById('audit-table-container').innerHTML = "";
 
             // Gather Codes
@@ -189,7 +205,78 @@
             }
         }
 
+        // Global variable to store last audit results for chat context
+        let lastAuditResults = null;
+
+        function parseMarkdown(text) {
+            if (!text) return "";
+            let html = text
+                // Headers (## Header)
+                .replace(/^## (.*$)/gim, '<h4>$1</h4>')
+                // Bold (**text**)
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                // Italic (*text*)
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                // Lists (- item)
+                .replace(/^\s*-\s+(.*$)/gim, '• $1<br>')
+                // Newlines
+                .replace(/\n/g, '<br>');
+            return html;
+        }
+
+        async function sendQuestion() {
+            const input = document.getElementById('chat-input');
+            const question = input.value.trim();
+            const chatBox = document.getElementById('chat-box');
+
+            if (!question) return;
+
+            // Add User Message
+            chatBox.innerHTML += `<div class="chat-message user">${question}</div>`;
+            input.value = "";
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            // Show typing indicator
+            const typingId = 'typing-' + Date.now();
+            chatBox.innerHTML += `<div id="${typingId}" class="chat-message agent"><em>Typing...</em></div>`;
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            try {
+                const res = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        context: document.getElementById('sanitized-view').innerText,
+                        audit_results: lastAuditResults,
+                        question: question
+                    })
+                });
+                const data = await res.json();
+
+                // Remove typing indicator
+                document.getElementById(typingId).remove();
+
+                if (data.error) {
+                    chatBox.innerHTML += `<div class="chat-message agent" style="color:red">Error: ${data.error}</div>`;
+                } else {
+                    const formattedDetails = parseMarkdown(data.answer);
+                    chatBox.innerHTML += `<div class="chat-message agent"><strong>Auditor:</strong> <div style="margin-top:5px; line-height: 1.6;">${formattedDetails}</div></div>`;
+                }
+            } catch (e) {
+                document.getElementById(typingId).remove();
+                chatBox.innerHTML += `<div class="chat-message agent" style="color:red">Network Error</div>`;
+            }
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function handleChatKey(e) {
+            if (e.key === 'Enter') sendQuestion();
+        }
+
         function renderResults(data) {
+            lastAuditResults = data.audit_results; // Store for chat
+            document.getElementById('chat-section').classList.remove('hidden'); // Show chat
+
             if (data.error) {
                 document.getElementById('audit-table-container').innerHTML = `<p class="error">${data.error}</p>`;
                 return;
@@ -239,7 +326,7 @@
             if (data.documentation_improvement) {
                 html += `<div class="improvement-block">
                 <h3>💡 Documentation Improvement</h3>
-                <p>${data.documentation_improvement}</p>
+                <div style="line-height: 1.6;">${parseMarkdown(data.documentation_improvement)}</div>
             </div>`;
             }
 
@@ -268,6 +355,11 @@
             document.getElementById('results-section').classList.add('hidden');
             document.getElementById('audit-table-container').innerHTML = "";
             document.getElementById('dx-analysis-container').innerHTML = "";
+            document.getElementById('chat-section').classList.add('hidden');
+            document.getElementById('chat-box').innerHTML = `
+                <div class="chat-message agent">
+                    <strong>Auditor:</strong> I've reviewed your case. Do you have any questions about the findings?
+                </div>`;
             currentSanitizedText = "";
         }
 
