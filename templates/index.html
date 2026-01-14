@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agentic Medical Auditor</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+
+    <div class="container">
+        <header>
+            <h1>Medical Coding Auditor <span class="badge">AI + NCCI</span></h1>
+        </header>
+
+        <main>
+            <!-- Input Section -->
+            <section class="card input-section">
+                <h2>1. Clinical Documentation</h2>
+                <textarea id="op-report" placeholder="Paste Operative Report here..."></textarea>
+
+                <div class="code-inputs">
+                    <div class="cpt-group">
+                        <h3>CPT Codes</h3>
+                        <div id="cpt-container" class="grid-inputs">
+                            <!-- JS will populate 10 inputs -->
+                        </div>
+                    </div>
+                    <div class="dx-group">
+                        <h3>Diagnosis Codes</h3>
+                        <div id="dx-container" class="grid-inputs">
+                            <!-- JS will populate inputs -->
+                        </div>
+                    </div>
+                </div>
+
+                <button id="btn-review" class="btn-primary" onclick="startReview()">Review & Audit</button>
+            </section>
+
+            <!-- Results Section (Hidden initially) -->
+            <section id="results-section" class="card results-section hidden">
+                <h2>Audit Results</h2>
+                <div id="audit-table-container"></div>
+                <div id="loading" class="hidden">
+                    <div class="spinner"></div> Auditing with Agent...
+                </div>
+            </section>
+        </main>
+
+        <!-- Redaction Viewer Modal -->
+        <div id="review-modal" class="modal hidden">
+            <div class="modal-content large-modal">
+                <div class="modal-header">
+                    <h2>Redaction Review</h2>
+                    <button class="btn-close" onclick="closeModal()">×</button>
+                </div>
+                <div class="modal-body split-view">
+                    <div class="panel original-panel">
+                        <h3>Original (Sensitive)</h3>
+                        <div id="original-view" class="paper-view" contenteditable="false"></div>
+                    </div>
+                    <div class="panel sanitized-panel">
+                        <h3>Sanitized Preview (Agent View)</h3>
+                        <div id="sanitized-view" class="paper-view readonly"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <span id="phi-count" class="status-text">Scanning...</span>
+                    <div class="actions">
+                        <button class="btn-secondary" onclick="closeModal()">Edit Source</button>
+                        <button class="btn-primary" onclick="confirmAndAudit()">Approve & Run Audit</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Initialize Inputs
+        const cptContainer = document.getElementById('cpt-container');
+        const dxContainer = document.getElementById('dx-container');
+
+        // Create 10 CPT slots with Units
+        for (let i = 0; i < 10; i++) {
+            cptContainer.innerHTML += `
+            <div class="cpt-row">
+                <input type="text" class="code-input cpt-code" placeholder="CPT ${i + 1}">
+                <input type="number" class="code-input cpt-units" placeholder="#" value="1" min="1">
+            </div>
+        `;
+        }
+        // Create 5 Dx slots
+        for (let i = 0; i < 5; i++) {
+            dxContainer.innerHTML += `<input type="text" class="code-input dx" placeholder="Dx ${i + 1}">`;
+        }
+
+        let currentSanitizedText = "";
+
+        async function startReview() {
+            const text = document.getElementById('op-report').value;
+            if (!text.trim()) return alert("Please paste an OP Report.");
+
+            // Show Modal
+            document.getElementById('review-modal').classList.remove('hidden');
+            document.getElementById('original-view').innerHTML = "Scanning for PHI...";
+            document.getElementById('sanitized-view').innerHTML = "Processing...";
+
+            // Call Backend to Sanitize
+            try {
+                const res = await fetch('/sanitize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text })
+                });
+                const data = await res.json();
+
+                // Populate Views
+                document.getElementById('original-view').innerHTML = data.original_html;
+                document.getElementById('sanitized-view').textContent = data.sanitized_text; // Text content to show raw
+                currentSanitizedText = data.sanitized_text;
+
+                const count = data.found_count;
+                const phiCounter = document.getElementById('phi-count');
+                if (count > 0) {
+                    phiCounter.innerHTML = `<span class="danger-text">⚠️ Found ${count} potential PHI items.</span>`;
+                } else {
+                    phiCounter.innerHTML = `<span class="success-text">✅ No PHI detected.</span>`;
+                }
+            } catch (e) {
+                console.error(e);
+                alert("Error connecting to server.");
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('review-modal').classList.add('hidden');
+        }
+
+        async function confirmAndAudit() {
+            closeModal();
+            document.getElementById('results-section').classList.remove('hidden');
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('audit-table-container').innerHTML = "";
+
+            // Gather Codes
+            const cptRows = document.querySelectorAll('.cpt-row');
+            const cptData = [];
+
+            cptRows.forEach(row => {
+                const code = row.querySelector('.cpt-code').value.trim();
+                const units = parseInt(row.querySelector('.cpt-units').value) || 1;
+                if (code) {
+                    cptData.push({ code: code, user_units: units });
+                }
+            });
+
+            const dxInputs = Array.from(document.querySelectorAll('.dx')).map(i => i.value).filter(v => v);
+
+            try {
+                const res = await fetch('/audit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: currentSanitizedText,
+                        cpt_codes: cptData, // Send objects now
+                        dx_codes: dxInputs
+                    })
+                });
+                const data = await res.json();
+                renderResults(data);
+            } catch (e) {
+                document.getElementById('audit-table-container').innerHTML = `<p class="error">Error: ${e}</p>`;
+            } finally {
+                document.getElementById('loading').classList.add('hidden');
+            }
+        }
+
+        function renderResults(data) {
+            if (data.error) {
+                document.getElementById('audit-table-container').innerHTML = `<p class="error">${data.error}</p>`;
+                return;
+            }
+
+            const results = data.audit_results || [];
+            let html = `
+            <table class="audit-table">
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Status</th>
+                        <th>Units</th>
+                        <th>Risk Flags (NCCI/MUE)</th>
+                        <th>Evidence / Rationale</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+            results.forEach(row => {
+                const isPass = row.documentation_status === "PASS";
+                const riskClass = row.billing_risk_alert !== "NONE" ? "risk-high" : "risk-none";
+                const statusClass = isPass ? "status-pass" : "status-fail";
+
+                html += `
+                <tr>
+                    <td class="font-mono bold">${row.code}</td>
+                    <td><span class="badge ${statusClass}">${row.documentation_status}</span></td>
+                    <td>
+                        <div style="display:flex; flex-direction:column; font-size:0.9em;">
+                           <span>Billed: <strong>${row.billed_units || '?'}</strong></span>
+                           <span style="color:var(--text-secondary)">Doc: ${row.calculated_units || '?'}</span>
+                        </div>
+                    </td>
+                    <td><span class="risk-badge ${riskClass}">${row.billing_risk_alert}</span></td>
+                    <td class="small-text">
+                        <div>"${row.clinical_evidence}"</div>
+                        ${row.risk_rationale ? `<div class="rationale-block"><strong>Rationale:</strong> ${row.risk_rationale}</div>` : ''}
+                    </td>
+                </tr>
+            `;
+            });
+
+            html += `</tbody></table>`;
+
+            if (data.documentation_improvement) {
+                html += `<div class="improvement-block">
+                <h3>💡 Documentation Improvement</h3>
+                <p>${data.documentation_improvement}</p>
+            </div>`;
+            }
+
+            document.getElementById('audit-table-container').innerHTML = html;
+        }
+    </script>
+</body>
+
+</html>
