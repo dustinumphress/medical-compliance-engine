@@ -183,3 +183,12 @@ Contributions are welcome!
 ## 📄 License
 
 Distributed under the MIT License. See `LICENSE` for more information.
+
+## ⚠️ Disclaimer
+
+This tool uses Artificial Intelligence (LLMs) to analyze medical documentation. **It involves probabilistic generation and may produce errors.**
+
+*   **Not Medical Advice**: This tool does not provide medical diagnosis or treatment advice.
+*   **Not Professional Coding Advice**: Results are for support/audit efficiency and must be verified by a certified medical coder (CPC/CCS).
+*   **Double Check**: Always validate findings against official AMA CPT® books, CMS guidelines, and payer-specific policies.
+
