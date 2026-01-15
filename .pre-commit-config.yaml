@@ -8,16 +8,10 @@ repos:
       - id: check-added-large-files
 
   # TruffleHog: Scans for secrets (Keys, Passwords)
-  - repo: https://github.com/trufflesecurity/trufflehog
-    rev: v3.63.0
+  # Detect Secrets (Lightweight Python alternative)
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
     hooks:
-      - id: trufflehog
-        name: TruffleHog
-        description: Detect secrets in your data.
-        entry: bash -c 'trufflehog git file://. --since-commit HEAD --only-verified --fail'
-        # Requires trufflehog installed locally or we can use the docker version manually
-        # This setup assumes you have the binary or use a docker wrapper.
-        # For simplicity in this demo, let's use the lightweight python detect-secrets as an alternative if trufflehog binary is missing
-        # OR just keep trufflehog if we assume the user will install it.
-        # Let's switch to a python-native one for easier setup: "detect-secrets-hook" is popular but trufflehog is better.
-        # We will leave trufflehog because I recommended it.
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: package.lock.json
