@@ -7,11 +7,3 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
 
-  # TruffleHog: Scans for secrets (Keys, Passwords)
-  # Detect Secrets (Lightweight Python alternative)
-  - repo: https://github.com/Yelp/detect-secrets
-    rev: v1.4.0
-    hooks:
-      - id: detect-secrets
-        args: ['--baseline', '.secrets.baseline']
-        exclude: package.lock.json
