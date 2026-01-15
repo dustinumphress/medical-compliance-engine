@@ -170,6 +170,8 @@ python execution/ingest_coding_rules.py
 
 ![Audit Result Example](docs/audit_result_v2.png)
 
+![Follow-up Chat Example](docs/follow_up_chat.png)
+
 ## 📊 Logic Flow
 
 1.  **Sanitization**: Input text -> `sanitize_phi.py` -> `<REDACTED>` text.
