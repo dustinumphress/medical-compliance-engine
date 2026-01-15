@@ -65,7 +65,7 @@ The project follows a **3-Layer Architecture** (Directive, Orchestration, Execut
     AWS_REGION=us-east-1
     AWS_ACCESS_KEY_ID=your_access_key
     AWS_SECRET_ACCESS_KEY=your_secret_key
-    
+
     # Optional: Enable Demo Mode
     DEMO_MODE=true
     ```
@@ -168,7 +168,7 @@ python execution/ingest_coding_rules.py
 4.  **Ask Follow-Up Questions**:
     *   Use the Chat interface at the bottom to ask for clarification (e.g., *"Why was 14301 denied?"*).
 
-![Audit Result Example](docs/audit_result_example.png)
+![Audit Result Example](docs/audit_result_example.png?raw=true&v=2)
 
 ## 📊 Logic Flow
 
