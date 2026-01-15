@@ -23,16 +23,16 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-MODEL_NAME = "claude-sonnet-4-5-20250929" # Correct stable version 
+MODEL_NAME = "-sonnet-4-5-20250929claude" # Correct stable version 
 
 # Bedrock Configuration
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "bedrock") # Default to bedrock for AWS host
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
-BEDROCK_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-5-sonnet-20240620-v1:0")
+BEDROCK_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-sonnet-4-5-20250929-v1:0")
 
 def query_bedrock(prompt, system_prompt):
     """
-    Query AWS Bedrock (Claude 3.5 Sonnet).
+    Query AWS Bedrock (Claude 4.5 Sonnet).
     """
     import boto3
     
