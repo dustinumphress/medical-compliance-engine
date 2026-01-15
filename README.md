@@ -1,5 +1,13 @@
 # medical-compliance-engine
 
+![Python](https://img.shields.io/badge/Python-3.12-blue)
+![AWS](https://img.shields.io/badge/AWS-Serverless-orange)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Privacy](https://img.shields.io/badge/Privacy-HIPAA%20Compliant%20Architecture-red)
+
+## 🎯 The Problem
+Medical coding errors—specifically "unbundling" (billing for overlapping procedures)—account for a massive portion of claim denials. Manual verification against the 2.3 million row NCCI dataset is slow and error-prone. This engine automates that compliance check, preventing denials before they happen.
+
 A comprehensive, AI-powered medical coding audit system designed to verify CPT codes against clinical documentation, enforce NCCI/MUE billing rules, and ensure compliance.
 
 ## 🚀 Key Features
@@ -23,6 +31,12 @@ A comprehensive, AI-powered medical coding audit system designed to verify CPT c
 ## 🛠️ Architecture
 
 The project follows a **3-Layer Architecture** (Directive, Orchestration, Execution):
+
+> [!CAUTION]
+> **Disclaimer**: This tool uses Artificial Intelligence (LLMs) to analyze medical documentation. **It involves probabilistic generation and may produce errors.**
+> *   **Not Medical Advice**: This tool does not provide medical diagnosis or treatment advice.
+> *   **Not Professional Coding Advice**: Results are for support/audit efficiency and must be verified by a certified medical coder (CPC/CCS).
+> *   **Double Check**: Always validate findings against official AMA CPT® books, CMS guidelines, and payer-specific policies.
 
 *   **`app.py`** (Orchestration): The Flask web server acting as the entry point and controller.
 *   **`execution/`** (Execution): Deterministic Python scripts handling the logic.
@@ -64,13 +78,15 @@ The project follows a **3-Layer Architecture** (Directive, Orchestration, Execut
 
 ## 🧪 AWS Demo Mode
 
-For recruiters, stakeholders, or testing without incurring LLM costs, you can enable **Demo Mode**.
+For safe testing or consistency verification, you can enable **Demo Mode**.
 
-*   **Activation**: Set `DEMO_MODE=true` in `.env`.
+*   **Activation**: Set `DEMO_MODE=true` in `.env` (or via Lambda Environment Variables).
 *   **Features**:
     *   **Scenario Selector**: Pre-loaded plastic surgery scenarios (e.g., "CPT Denial", "Diagnosis Specificity Error", "Clean Audit") are available at the top of the UI.
     *   **Locked Inputs**: Prevents custom text entry to ensure predictable demos.
-    *   **Mock Chat**: The "Ask the Auditor" chat interface disconnects from the live LLM and serves **canned, pre-written answers** for specific questions. This ensures **$0.00 cost** for chat interactions during demos while still showing off the UI.
+    *   **Live Audit / Mock Chat**:
+        *   **The Audit**: Runs against the **Live LLM** (AWS Bedrock/Anthropic) to demonstrate real-time reasoning. *Standard costs apply.*
+        *   **The Chat**: The "Ask the Auditor" follow-up chat uses **canned, pre-written answers**. This ensures **$0.00 cost** for prolonged interaction while demonstrating the UI capabilities.
     *   **Fake PHI Injection**: Scenarios include fake patient data (e.g., "John Doe") to demonstrate the live PHI redaction engine safely.
 
 ## 📥 Data Initialization (ETL Pipeline)
@@ -87,6 +103,9 @@ Create a folder named `inputs/` in the root directory and place the following th
 | **RVU (Definitions)** | [CMS Physician Fee Schedule](https://www.cms.gov/medicare/payment/fee-schedules/physician-fee-schedule/pfs-relative-value-files) <br> Download the "2026 National Physician Fee Schedule Relative Value File". Use the `.txt` version inside the zip. | `PPRRVU2026_Jan_nonQPP.txt` |
 | **NCCI (Bundling)** | [CMS PTP Coding Edits](https://www.cms.gov/medicare/coding-billing/ncci-medicare/practitioner-ptp-edits) <br> Select "Practitioner PTP Edits". Download the Text Format (English) version. | `ccipra-2026.txt` |
 | **MUE (Limits)** | [CMS MUE Tables](https://www.cms.gov/medicare/coding-billing/ncci-medicare/medicare-ncci-procedure-to-procedure-ptp-edits/practitioner-ptp-edits) <br> Select "Practitioner Services MUE Table". Download the CSV version. | `MCR_MUE_Practitioner.csv` |
+
+> [!NOTE]
+> **Data Privacy**: Due to CMS data usage agreements and repository size limits, these 300MB+ data files cannot be hosted on GitHub. The ETL pipeline builds the database locally on your machine.
 
 ### 2. Expected Directory Structure
 Ensure your folder looks like this before running the script:
@@ -200,18 +219,14 @@ Contributions are welcome!
 
 Distributed under the MIT License. See `LICENSE` for more information.
 
-## ⚠️ Disclaimer
 
-This tool uses Artificial Intelligence (LLMs) to analyze medical documentation. **It involves probabilistic generation and may produce errors.**
-
-*   **Not Medical Advice**: This tool does not provide medical diagnosis or treatment advice.
-*   **Not Professional Coding Advice**: Results are for support/audit efficiency and must be verified by a certified medical coder (CPC/CCS).
-*   **Double Check**: Always validate findings against official AMA CPT® books, CMS guidelines, and payer-specific policies.
 
 
 ## ☁️ Serverless Deployment (AWS Lambda)
 
 This project includes a **Serverless Deployment** configuration (`serverless_deploy.yaml`) to run the application on **AWS Lambda** via a container image. This offers a highly scalable, specific-cost-only (pay-per-request) hosting solution.
+
+> **Estimated Cost**: ~$0.00/month idle. You only pay for Bedrock tokens and Lambda execution time (milliseconds) when actually auditing.
 
 ### 1. Prerequisites
 *   **AWS CLI** installed and configured (`aws configure`).
