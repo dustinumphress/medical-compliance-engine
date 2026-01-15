@@ -63,8 +63,21 @@ def sanitize_text(text):
                                ])
     
     # Filter for reasonable score
-    # Presidio sometimes has low confidence FP. Lowered to 0.35 per user request to catch more edge cases.
-    results = [r for r in results if r.score >= 0.35]
+    # Presidio sometimes has low confidence FP. Lowered to 0.35 per user request.
+    # Exclude allow-listed medical terms often mistaken for names.
+    ALLOW_LIST = {"fasciocutaneous", "xerofonn", "xeroform"}
+    
+    filtered_results = []
+    for r in results:
+        if r.score < 0.35: continue
+        
+        entity_text = text[r.start:r.end].lower()
+        if entity_text in ALLOW_LIST:
+            continue
+            
+        filtered_results.append(r)
+        
+    results = filtered_results
 
     # Anonymize
     # Replace with <ENTITY_TYPE>

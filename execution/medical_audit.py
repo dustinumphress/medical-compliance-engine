@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from sanitize_phi import sanitize_text
 import sqlite3
 import itertools
+import re
 
 # Load environment variables
 load_dotenv(override=True)
@@ -302,13 +303,19 @@ def audit_medical_record(raw_text, cpt_list, diagnosis_codes, units_map=None):
     
     STEP 2: REIMBURSEMENT RISK ANALYSIS
     - Apply the SYSTEM ALERTS provided above. Use the exact rationale provided in SYSTEM ALERTS.
-    - If a code has a SYSTEM ALERT, its 'billing_risk_alert' MUST MATCH calculation.
+    - Check for "Cloned Node" or "Copy-Billed" text.
+    - Validate medical necessity.
     
-    STEP 3: DIAGNOSIS VALIDATION
-    - Analyze the provided Diagnosis Codes.
-    - FLAG any 'Unspecified' codes (e.g. unspecified side, unspecified site) as non-optimal if the text supports a specific one.
-    - CRITICAL: Flag vaguely defined 'Encounter for' Z-codes (like Z42.8) if they are the PRIMARY diagnosis. This is often a denial trigger.
+    STEP 2: DIAGNOSIS VALIDATION
+    - Check if the diagnosis codes listed support the CPT codes.
+    - Flag any VAGUE or UNSPECIFIED codes (e.g., Unspecified side, Unspecified injury, Z-codes for encounters) as HIGH RISK.
     
+    CRITICAL OUTPUT RULES:
+    1. You MUST return a result object for EVERY SINGLE CPT CODE listed in "INPUT DATA". 
+    2. Do NOT skip codes. If 5 codes are input, 5 results must be returned.
+    3. Even if a code is clearly supported or clearly wrong, it MUST be in the "audit_results" array.
+    4. If the CPT code is invalid or unknown, mark it as FAIL and explain why.
+
     OUTPUT FORMAT (JSON ONLY):
     Respond strictly in this JSON structure:
     
@@ -316,100 +323,123 @@ def audit_medical_record(raw_text, cpt_list, diagnosis_codes, units_map=None):
         "audit_results": [
             {{
                 "code": "CPT Code",
-                "documentation_status": "PASS" or "FAIL",
-                "clinical_evidence": "Extract query",
-                "calculated_units": "Integer (Your independent count supported by text)",
+                "documentation_status": "PASS" or "FAIL" or "PARTIAL",
+                "clinical_evidence": "One sentence quote from text or 'No evidence found'",
+                "calculated_units": "Integer (Your independent count derived from text)",
                 "billing_risk_alert": "NONE" or "HIGH - MUE EXCEEDED" or "HIGH - NCCI BUNDLING",
                 "risk_rationale": "Clear explanation. If Risk exists, use the human-readable explanation from SYSTEM ALERTS."
             }}
+            ... (Repeat for ALL input codes)
         ],
-        "diagnosis_analysis": "A short summary paragraph validating the diagnosis codes. Mention specific codes that are vague or unspecified.",
-        "documentation_improvement": "Advice string"
+        "diagnosis_analysis": "Summary paragraph validating diagnosis specificity. Use Markdown bullet points for readability.",
+        "documentation_improvement": "Advice for the provider. Use Markdown bullet points for readability."
     }}
     """
     
-    response_text = query_anthropic(prompt, system_prompt)
-    if not response_text:
-        return {"error": "LLM failed"}
-        
-    try:
-        # Clean up potential markdown code blocks if Claude adds them
-        cleaned_text = response_text.replace("```json", "").replace("```", "").strip()
-        result_json = json.loads(cleaned_text)
-        
-        # --- POST-PROCESS: INJECT DETERMINISTIC NCCI/MUE DATA ---
-        if "audit_results" in result_json:
-            for item in result_json["audit_results"]:
-                code = item.get("code")
-                user_units = units_map.get(code, 1)
-                item["billed_units"] = user_units # Pass back to frontend
+    
+    max_retries = 3
+    last_error = None
+    
+    for attempt in range(max_retries):
+        try:
+            response_text = query_anthropic(prompt, system_prompt)
+            if not response_text:
+                raise ValueError("Empty response from LLM")
                 
-                # Check Unit Discrepancy
-                calc_units = item.get("calculated_units")
-                try:
-                    calc_val = int(calc_units) if calc_units else 0
-                    if calc_val != user_units:
-                        # Add a discrepancy alert if risk is currently NONE (or append)
-                        disc_msg = f"Unit Discrepancy: Billed {user_units} but Doc supports {calc_val}. "
+            # Robust JSON Extraction
+            # 1. Try finding a markdown block first
+            json_match = re.search(r"```(?:json)?(.*?)```", response_text, re.DOTALL)
+            if json_match:
+                cleaned_text = json_match.group(1).strip()
+            else:
+                # 2. Key fallback: Find first { and last }
+                start = response_text.find('{')
+                end = response_text.rfind('}')
+                if start != -1 and end != -1:
+                    cleaned_text = response_text[start:end+1]
+                else:
+                    cleaned_text = response_text.strip()
+    
+            result_json = json.loads(cleaned_text)
+            break # Success!
+            
+        except Exception as e:
+            logger.warning(f"Attempt {attempt + 1}/{max_retries} failed: {e}")
+            last_error = e
+            if attempt == max_retries - 1:
+                return {"error": f"LLM failed after {max_retries} attempts. Last error: {str(last_error)}"}
+        
+    # --- POST-PROCESS: INJECT DETERMINISTIC NCCI/MUE DATA ---
+    if "audit_results" in result_json:
+        for item in result_json["audit_results"]:
+            code = item.get("code")
+            user_units = units_map.get(code, 1)
+            item["billed_units"] = user_units # Pass back to frontend
+            
+            # Check Unit Discrepancy
+            calc_units = item.get("calculated_units")
+            try:
+                calc_val = int(calc_units) if calc_units else 0
+                if calc_val != user_units:
+                    # Add a discrepancy alert if risk is currently NONE (or append)
+                    disc_msg = f"Unit Discrepancy: Billed {user_units} but Doc supports {calc_val}. "
+                    
+                    current_risk = item.get("billing_risk_alert", "NONE")
+                    if current_risk == "NONE":
+                        item["billing_risk_alert"] = "UNIT DISCREPANCY"
+                        item["risk_rationale"] = disc_msg + item.get('risk_rationale', '')
+                    else:
+                        # Prepend to rationale
+                        item["risk_rationale"] = disc_msg + item.get('risk_rationale', '')
                         
-                        current_risk = item.get("billing_risk_alert", "NONE")
-                        if current_risk == "NONE":
-                            item["billing_risk_alert"] = "UNIT DISCREPANCY"
-                            item["risk_rationale"] = disc_msg + item.get('risk_rationale', '')
-                        else:
-                            # Prepend to rationale
-                            item["risk_rationale"] = disc_msg + item.get('risk_rationale', '')
-                            
-                except:
-                    pass
+            except:
+                pass
 
-                # Overwrite/Append NCCI info from DB if exists
-                if code in ncci_alerts:
-                    details = ncci_alerts[code]
-                    
-                    # Determine highest priority risk
-                    # If MUE exists, it's usually High.
-                    # NCCI is also High.
-                    
-                    # Build consolidated human readable string
-                    reasons = []
-                    risks = []
-                    for d in details:
-                        # Use our new human readable helper
-                        reasons.append(get_readable_rationale(d))
-                        risks.append(d['alert'])
+            # Overwrite/Append NCCI info from DB if exists
+            if code in ncci_alerts:
+                details = ncci_alerts[code]
+                
+                # Determine highest priority risk
+                # If MUE exists, it's usually High.
+                # NCCI is also High.
+                
+                # Build consolidated human readable string
+                reasons = []
+                risks = []
+                for d in details:
+                    # Use our new human readable helper
+                    reasons.append(get_readable_rationale(d))
+                    risks.append(d['alert'])
 
-                    # Consolidate Risk Label
-                    if any("MUE" in r for r in risks):
-                        item["billing_risk_alert"] = "HIGH - MUE EXCEEDED"
-                    elif any("NCCI" in r for r in risks):
-                        item["billing_risk_alert"] = "HIGH - NCCI BUNDLING"
-                    
-                    current = item.get("risk_rationale", "")
-                    clean_db_rationale = " | ".join(reasons)
-                    
-                    # Merge Logic:
-                    # DB Rationale (The Rules) + LLM Rationale (The Clinical Context)
-                    # Avoid duplication if LLM just repeated the rule.
-                    
-                    combined_rationale = clean_db_rationale
-                    
-                    if "Unit Discrepancy" in current:
-                        # Extract discrepancy part
-                        disc_part = current.split("Unit Discrepancy")[1].split(".")[0]
-                        combined_rationale = f"Unit Discrepancy{disc_part}. {combined_rationale}"
-                        # Remove discrepancy from current to check rest
-                        current = current.replace(f"Unit Discrepancy{disc_part}.", "").strip()
+                # Consolidate Risk Label
+                if any("MUE" in r for r in risks):
+                    item["billing_risk_alert"] = "HIGH - MUE EXCEEDED"
+                elif any("NCCI" in r for r in risks):
+                    item["billing_risk_alert"] = "HIGH - NCCI BUNDLING"
+                
+                current = item.get("risk_rationale", "")
+                clean_db_rationale = " | ".join(reasons)
+                
+                # Merge Logic:
+                # DB Rationale (The Rules) + LLM Rationale (The Clinical Context)
+                # Avoid duplication if LLM just repeated the rule.
+                
+                combined_rationale = clean_db_rationale
+                
+                if "Unit Discrepancy" in current:
+                    # Extract discrepancy part
+                    disc_part = current.split("Unit Discrepancy")[1].split(".")[0]
+                    combined_rationale = f"Unit Discrepancy{disc_part}. {combined_rationale}"
+                    # Remove discrepancy from current to check rest
+                    current = current.replace(f"Unit Discrepancy{disc_part}.", "").strip()
 
-                    # Append clinical context if meaningful and short
-                    if current and len(current) > 10 and current not in clean_db_rationale:
-                        combined_rationale += f"\n[Clinical Note]: {current}"
-                        
-                    item["risk_rationale"] = combined_rationale
+                # Append clinical context if meaningful and short
+                if current and len(current) > 10 and current not in clean_db_rationale:
+                    combined_rationale += f"\n[Clinical Note]: {current}"
+                    
+                item["risk_rationale"] = combined_rationale
 
-        return result_json
-    except json.JSONDecodeError:
-        return {"error": "Invalid JSON from LLM", "raw_response": response_text}
+    return result_json
 
 def print_human_readable_result(result):
     if "error" in result:

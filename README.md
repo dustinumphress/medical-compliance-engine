@@ -12,6 +12,7 @@ A comprehensive, AI-powered medical coding audit system designed to verify CPT c
 *   **Privacy First**:
     *   **Local PHI Redaction**: Microsoft Presidio runs LOCALLY to redact Patient Names, MRNs, Dates, and other identifiers *before* data leaves your machine.
     *   **Redaction Viewer**: Review and approve sanitized text in the UI before submission.
+    *   **HIPAA Compliance**: For production use with PHI, ensure you are using an Enterprise LLM API with a signed Business Associate Agreement (BAA).
 *   **Interactive Web UI**: Clean, dark-mode Flask application for easy data entry (Calculated vs. Billed Units display).
     *   **NEW: Interactive Chat**: Ask follow-up questions to the "Auditor Agent" about specific denials or coding advice.
     *   **Rich Formatting**: Results and advice are formatted for readability (bolding, lists, etc.).
@@ -113,7 +114,7 @@ python execution/ingest_coding_rules.py
     ```bash
     .\run_app.ps1
     ```
-    *(Recommended for Windows users - handles Docker build and run automatically)*
+    *(Recommended for Windows users. This script automatically stops old containers, rebuilds the Docker image, and starts the new version to ensure you are always running the latest code.)*
 
     **Manual Python:**
     ```bash

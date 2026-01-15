@@ -20,7 +20,17 @@
             <!-- Input Section -->
             <section class="card input-section">
                 <h2>1. Clinical Documentation</h2>
-                <textarea id="op-report" placeholder="Paste Operative Report here..."></textarea>
+                <div
+                    style="background-color: #3b0a0a; border: 1px solid #ff4444; color: #ffcccc; padding: 10px; margin-bottom: 10px; border-radius: 4px; font-size: 0.9em;">
+                    <strong>⚠️ CRITICAL WARNING:</strong> Do NOT paste patient names, DOBs, or MRNs into this box. <br>
+                    While we have a redaction engine, it is a <em>fallback safety net only</em>. You are responsible for
+                    scrubbing PHI before input.
+                </div>
+                <textarea id="op-report"
+                    placeholder="Paste Operative Report here... (Ensure no PHI is present)"></textarea>
+                <p style="font-size: 0.85em; color: #888; margin-top: 5px; text-align: right;">
+                    <em>Please double-check the Redaction Review screen before submitting.</em>
+                </p>
 
                 <div class="code-inputs">
                     <div class="cpt-group">
@@ -228,6 +238,8 @@
                 .replace(/\*(.*?)\*/g, '<em>$1</em>')
                 // Lists (- item)
                 .replace(/^\s*-\s+(.*$)/gim, '• $1<br>')
+                // Numbered Lists (1. item or (1) item)
+                .replace(/^\s*(?:\d+\.|\(\d+\))\s+(.*$)/gim, '<br><strong>$&</strong>')
                 // Newlines
                 .replace(/\n/g, '<br>');
             return html;
@@ -250,6 +262,17 @@
             chatBox.innerHTML += `<div id="${typingId}" class="chat-message agent"><em>Typing...</em></div>`;
             chatBox.scrollTop = chatBox.scrollHeight;
 
+            // Helper: Copy to Clipboard
+            window.copyToClipboard = function (id) {
+                const text = document.getElementById(id).innerText;
+                navigator.clipboard.writeText(text).then(() => {
+                    const btn = document.getElementById('btn-' + id);
+                    const originalText = btn.innerHTML;
+                    btn.innerHTML = "✅ Copied!";
+                    setTimeout(() => btn.innerHTML = originalText, 2000);
+                });
+            }
+
             try {
                 const res = await fetch('/chat', {
                     method: 'POST',
@@ -268,8 +291,17 @@
                 if (data.error) {
                     chatBox.innerHTML += `<div class="chat-message agent" style="color:red">Error: ${data.error}</div>`;
                 } else {
+                    const msgId = 'msg-' + Date.now();
                     const formattedDetails = parseMarkdown(data.answer);
-                    chatBox.innerHTML += `<div class="chat-message agent"><strong>Auditor:</strong> <div style="margin-top:5px; line-height: 1.6;">${formattedDetails}</div></div>`;
+
+                    chatBox.innerHTML += `
+                        <div class="chat-message agent">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <strong>Auditor:</strong>
+                                <button id="btn-${msgId}" onclick="window.copyToClipboard('${msgId}')" style="background:transparent; border:1px solid var(--text-secondary); color:var(--text-secondary); cursor:pointer; font-size:0.8em; padding:2px 8px; border-radius:4px;">📋 Copy</button>
+                            </div>
+                            <div id="${msgId}" style="margin-top:5px; line-height: 1.6;">${formattedDetails}</div>
+                        </div>`;
                 }
             } catch (e) {
                 document.getElementById(typingId).remove();
@@ -283,7 +315,7 @@
         }
 
         function renderResults(data) {
-            lastAuditResults = data.audit_results; // Store for chat
+            lastAuditResults = data; // Store FULL object for chat context
             document.getElementById('chat-section').classList.remove('hidden'); // Show chat
 
             if (data.error) {
@@ -342,13 +374,31 @@
             document.getElementById('audit-table-container').innerHTML = html;
 
             if (data.diagnosis_analysis) {
+                const dxText = data.diagnosis_analysis.toLowerCase();
+                // Check for negative keywords to trigger alert style
+                const isIssue = dxText.includes('unspecified') ||
+                    dxText.includes('vague') ||
+                    dxText.includes('risk') ||
+                    dxText.includes('mismatch') ||
+                    dxText.includes('fail') ||
+                    dxText.includes('invalid');
+
+                const alertStyle = isIssue
+                    ? 'border: 2px solid #ff4444; background: rgba(59, 10, 10, 0.9); box-shadow: 0 0 15px rgba(255, 68, 68, 0.3);'
+                    : 'background: var(--bg-card); border: 1px solid var(--border);';
+
+                const icon = isIssue ? '⚠️' : '✅';
+                const titleColor = isIssue ? 'color: #ffcccc;' : '';
+
                 const dxHtml = `
-                    <div class="diagnosis-block">
-                        <h3>Diagnosis Analysis</h3>
+                    <div class="diagnosis-block" style="${alertStyle} padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <h3 style="${titleColor}">${icon} Diagnosis Analysis</h3>
                         <p>${data.diagnosis_analysis.replace(/\n/g, '<br>')}</p>
                     </div>
                 `;
                 document.getElementById('dx-analysis-container').innerHTML = dxHtml;
+            } else {
+                document.getElementById('dx-analysis-container').innerHTML = "";
             }
         }
 

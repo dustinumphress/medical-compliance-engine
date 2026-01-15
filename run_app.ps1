@@ -5,8 +5,8 @@ Write-Host "🛑 Cleaning up old instances..."
 Stop-Process -Name "python" -Force -ErrorAction SilentlyContinue
 
 # Stop and Remove Docker containers named 'medical-audit'
-docker stop medical-audit -ErrorAction SilentlyContinue
-docker rm medical-audit -ErrorAction SilentlyContinue
+docker stop medical-audit 2>$null
+docker rm medical-audit 2>$null
 
 Write-Host "🐳 Building Docker Image..."
 # Build the image
