@@ -25,7 +25,53 @@ logger = logging.getLogger(__name__)
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 MODEL_NAME = "claude-sonnet-4-5-20250929" # Correct stable version 
 
+# Bedrock Configuration
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "bedrock") # Default to bedrock for AWS host
+AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+BEDROCK_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-5-sonnet-20240620-v1:0")
+
+def query_bedrock(prompt, system_prompt):
+    """
+    Query AWS Bedrock (Claude 3.5 Sonnet).
+    """
+    import boto3
+    
+    try:
+        client = boto3.client(service_name="bedrock-runtime", region_name=AWS_REGION)
+        
+        # Claude 3 Messages API payload for Bedrock
+        body = json.dumps({
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 4096,
+            "temperature": 0,
+            "system": system_prompt,
+            "messages": [
+                {"role": "user", "content": prompt}
+            ]
+        })
+        
+        response = client.invoke_model(
+            body=body,
+            modelId=BEDROCK_MODEL_ID,
+            accept="application/json",
+            contentType="application/json"
+        )
+        
+        response_body = json.loads(response.get("body").read())
+        return response_body.get("content")[0].get("text")
+        
+    except Exception as e:
+        logger.error(f"Error querying AWS Bedrock: {e}")
+        return None
+
 def query_anthropic(prompt, system_prompt):
+    """
+    Router function: Queries either Bedrock or Anthropic Direct based on LLM_PROVIDER.
+    """
+    if LLM_PROVIDER.lower() == "bedrock":
+        return query_bedrock(prompt, system_prompt)
+        
+    # Fallback to Direct Anthropic API
     if not ANTHROPIC_API_KEY:
         logger.error("ANTHROPIC_API_KEY not found in .env file.")
         return None
@@ -360,7 +406,7 @@ def audit_medical_record(raw_text, cpt_list, diagnosis_codes, units_map=None):
                 else:
                     cleaned_text = response_text.strip()
     
-            result_json = json.loads(cleaned_text)
+            result_json = json.loads(cleaned_text, strict=False)
             break # Success!
             
         except Exception as e:

@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "Deploy Medical Audit Engine on Lambda (Serverless) with Bedrock Access"
+
+Parameters:
+  ImageUri:
+    Type: String
+    Description: "The URI of the Docker image in ECR"
+
+Resources:
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonBedrockFullAccess
+
+  AuditFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: MedicalAuditDemo
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUri
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 120
+      MemorySize: 2048
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          DEMO_MODE: "True"
+
+  AuditFunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !Ref AuditFunction
+      AuthType: NONE
+      Cors:
+        AllowOrigins: 
+          - "*"
+        AllowMethods: 
+          - "POST"
+
+  PublicAccessPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AuditFunction
+      Principal: "*"
+      Action: lambda:InvokeFunctionUrl
+      FunctionUrlAuthType: NONE
+
+Outputs:
+  DemoUrl:
+    Description: "The Public URL for your Medical Audit Demo"
+    Value: !GetAtt AuditFunctionUrl.FunctionUrl

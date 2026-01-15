@@ -1,6 +1,9 @@
 # Use an official Python runtime as a parent image
 FROM python:3.12-slim
 
+# Install AWS Lambda Adapter (Enables Flask to run on Lambda)
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.4 /lambda-adapter /opt/extensions/lambda-adapter
+
 # Set the working directory in the container
 WORKDIR /app
 
@@ -24,6 +27,7 @@ COPY . .
 
 # Expose port 5000 for Flask
 EXPOSE 5000
+ENV PORT=5000
 
 # Define environment variable
 ENV FLASK_APP=app.py

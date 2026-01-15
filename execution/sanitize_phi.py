@@ -7,32 +7,26 @@ from presidio_analyzer import AnalyzerEngine, PatternRecognizer, Pattern
 from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig
 
-# Initialize engines
+# Initialize engines lazily
 # Note: This requires 'en_core_web_lg' to be installed.
-try:
-    analyzer = AnalyzerEngine()
-    
-    # --- ADD THIS SECTION AFTER INITIALIZING 'analyzer' ---
+analyzer = None
+anonymizer = AnonymizerEngine()
 
-    # 1. Custom MRN Recognizer (Regex)
-    mrn_pattern = Pattern(name="mrn_pattern", regex=r"(?i)\b(mrn|acct|account|visit|pat|id)\s*#?[:\.-]?\s*([0-9\-]+)", score=1.0)
-    mrn_recognizer = PatternRecognizer(supported_entity="MEDICAL_RECORD_NUMBER", patterns=[mrn_pattern])
-    analyzer.registry.add_recognizer(mrn_recognizer)
+def get_analyzer():
+    global analyzer
+    if analyzer is None:
+        analyzer = AnalyzerEngine()
+        
+        # 1. Custom MRN Recognizer (Regex)
+        mrn_pattern = Pattern(name="mrn_pattern", regex=r"(?i)\b(mrn|acct|account|visit|pat|id)\s*#?[:\.-]?\s*([0-9\-]+)", score=1.0)
+        mrn_recognizer = PatternRecognizer(supported_entity="MEDICAL_RECORD_NUMBER", patterns=[mrn_pattern])
+        analyzer.registry.add_recognizer(mrn_recognizer)
+        # 2. Custom Patient Name Recognizer (Contextual Regex)
+        pat_name_pattern = Pattern(name="pat_name_pattern", regex=r"(?i)(?:patient\s+name|patient)\s*[:\.-]\s*([A-Za-z,\s]+?)(?:\s{2,}|\n|$)", score=0.9)
+        pat_name_recognizer = PatternRecognizer(supported_entity="PATIENT_NAME_HEADER", patterns=[pat_name_pattern])
+        analyzer.registry.add_recognizer(pat_name_recognizer)
 
-    # 2. Custom Patient Name Recognizer (Contextual Regex)
-    # Catches "PATIENT NAME: LAST, FIRST" or "PATIENT: NAME"
-    # We capture the value group.
-    pat_name_pattern = Pattern(name="pat_name_pattern", regex=r"(?i)(?:patient\s+name|patient)\s*[:\.-]\s*([A-Za-z,\s]+?)(?:\s{2,}|\n|$)", score=0.9)
-    pat_name_recognizer = PatternRecognizer(supported_entity="PATIENT_NAME_HEADER", patterns=[pat_name_pattern])
-    analyzer.registry.add_recognizer(pat_name_recognizer)
-
-    # --- END ADDITION ---
-
-    anonymizer = AnonymizerEngine()
-except Exception as e:
-    print(f"Error initializing Presidio: {e}")
-    print("Ensure you have run: python -m spacy download en_core_web_lg")
-    sys.exit(1)
+    return analyzer
 
 def sanitize_text(text):
     """
@@ -44,9 +38,11 @@ def sanitize_text(text):
     if not text:
         return "", []
 
+    # Lazy Init
+    analyzer_instance = get_analyzer()
+
     # Analyze
-    # We look for common PHI entities.
-    results = analyzer.analyze(text=text,
+    results = analyzer_instance.analyze(text=text,
                                language='en',
                                entities=[
                                    "PERSON", 
@@ -65,7 +61,7 @@ def sanitize_text(text):
     # Filter for reasonable score
     # Presidio sometimes has low confidence FP. Lowered to 0.35 per user request.
     # Exclude allow-listed medical terms often mistaken for names.
-    ALLOW_LIST = {"fasciocutaneous", "xerofonn", "xeroform"}
+    ALLOW_LIST = {"fasciocutaneous", "xerofonn", "xeroform", "fascia lata", "fascia", "lata"}
     
     filtered_results = []
     for r in results:

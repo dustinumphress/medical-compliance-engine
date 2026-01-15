@@ -32,20 +32,56 @@ def highlight_phi(text, entities):
         
     return working_text
 
+def highlight_sanitized_replacements(text):
+    """
+    Wraps <TAGS> in mark elements for Better UI visibility in the sanitized view.
+    """
+    import re
+    # Regex to find <PERSON>, <DATE>, etc.
+    # We want to wrap them in <mark class="phi-replacement">
+    return re.sub(r'(<[^>]+>)', r'<mark class="phi-replacement">\1</mark>', text)
+
+from execution.demo_data import SCENARIOS
+
+# Demo Mode Configuration
+DEMO_MODE = os.getenv("DEMO_MODE", "False").lower() == "true"
+
 @app.route('/')
 def home():
-    return render_template('index.html')
+    return render_template('index.html', demo_mode=DEMO_MODE)
+
+@app.route('/get_scenarios', methods=['GET'])
+def get_scenarios():
+    if not DEMO_MODE:
+        return jsonify({})
+    return jsonify(SCENARIOS)
 
 @app.route('/sanitize', methods=['POST'])
 def sanitize_endpoint():
     data = request.json
     text = data.get('text', '')
     
+    if DEMO_MODE:
+        # Prevent custom input in Demo Mode
+        # Only allow text that matches one of the scenarios
+        allowed_texts = [s['text'] for s in SCENARIOS.values()]
+        if text not in allowed_texts:
+             return jsonify({
+                "original_html": "<b>Custom input disabled in Demo Mode.</b>",
+                "sanitized_text": text, # Assume pre-sanitized
+                "is_clean": True,
+                "found_count": 0
+            })
+
     sanitized_text, entities = clean_text_with_presidio(text)
+    
+    # Highlight the replacements in the "Sanitized View"
+    sanitized_html = highlight_sanitized_replacements(sanitized_text)
     
     return jsonify({
         "original_html": highlight_phi(text, entities),
-        "sanitized_text": sanitized_text,
+        "sanitized_text": sanitized_text, # Keep raw for editing/pipeline
+        "sanitized_html": sanitized_html, # New field for UI display
         "is_clean": len(entities) == 0,
         "found_count": len(entities)
     })
@@ -91,6 +127,22 @@ def chat_endpoint():
     if not question:
          return jsonify({"error": "No question provided"}), 400
          
+    if DEMO_MODE:
+        # Cost-Saving Measure: Demo Mode uses canned answers ONLY.
+        # We do NOT hit the LLM API to prevent bot spam/billing.
+        canned_answer = None
+        
+        # Check all scenarios for a matching question
+        for scenario in SCENARIOS.values():
+            if question in scenario.get("chat_answers", {}):
+                canned_answer = scenario["chat_answers"][question]
+                break
+        
+        if canned_answer:
+            return jsonify({"answer": canned_answer})
+        else:
+            return jsonify({"answer": "I am running in Demo Mode to prevent API abuse. Please select one of the suggested questions above."})
+
     response = consult_auditor(context, results, question)
     return jsonify(response)
 

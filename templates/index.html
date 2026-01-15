@@ -19,7 +19,23 @@
         <main>
             <!-- Input Section -->
             <section class="card input-section">
+                <!-- Hosted Demo Mode Scenario Selector -->
+                {% if demo_mode %}
+                <div class="demo-banner"
+                    style="background: #1e293b; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid var(--accent);">
+                    <h3 style="margin-top:0; color: var(--accent);">🧪 AWS Demo Mode</h3>
+                    <p style="margin-bottom: 10px;">Select a scenario to test the auditor. Custom input is disabled in
+                        this demo.</p>
+                    <div id="scenario-container" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <!-- JS Populates Buttons Here -->
+                        <button class="btn-secondary">Loading Scenarios...</button>
+                    </div>
+                </div>
+                {% endif %}
+
                 <h2>1. Clinical Documentation</h2>
+
+                {% if not demo_mode %}
                 <div
                     style="background-color: #3b0a0a; border: 1px solid #ff4444; color: #ffcccc; padding: 10px; margin-bottom: 10px; border-radius: 4px; font-size: 0.9em;">
                     <strong>⚠️ CRITICAL WARNING:</strong> Do NOT paste patient names, DOBs, or MRNs into this box. <br>
@@ -31,6 +47,10 @@
                 <p style="font-size: 0.85em; color: #888; margin-top: 5px; text-align: right;">
                     <em>Please double-check the Redaction Review screen before submitting.</em>
                 </p>
+                {% else %}
+                <textarea id="op-report" readonly placeholder="Select a scenario above to load text..."
+                    style="background: #111; color: #666; cursor: not-allowed;"></textarea>
+                {% endif %}
 
                 <div class="code-inputs">
                     <div class="cpt-group">
@@ -49,7 +69,8 @@
 
                 <div class="actions">
                     <button id="btn-reset" class="btn-secondary" onclick="resetForm()">Reset</button>
-                    <button id="btn-review" class="btn-primary" onclick="startReview()">Review & Audit</button>
+                    <button id="btn-review" class="btn-primary" onclick="startReview()" {% if demo_mode %}disabled{%
+                        endif %}>Review & Audit</button>
                 </div>
             </section>
 
@@ -71,10 +92,20 @@
                         </div>
                     </div>
                     <div class="chat-input-area">
+                        {% if demo_mode %}
+                        <!-- Demo Mode: Canned Questions Only -->
+                        <div id="demo-questions-promo"
+                            style="flex: 1; text-align: left; padding: 10px; background: #222; border-radius: 4px;">
+                            <em>Loading suggested questions...</em>
+                        </div>
+                        <input type="hidden" id="chat-input"> <!-- Hidden input to hold clicked value -->
+                        {% else %}
+                        <!-- Standard Mode: Free Text -->
                         <input type="text" id="chat-input"
                             placeholder="Ask a question (e.g., 'Why was code 14301 denied?')..."
                             onkeypress="handleChatKey(event)">
                         <button onclick="sendQuestion()">Send</button>
+                        {% endif %}
                     </div>
                 </div>
                 <div id="loading" class="hidden">
@@ -163,7 +194,7 @@
 
                 // Populate Views
                 document.getElementById('original-view').innerHTML = data.original_html;
-                document.getElementById('sanitized-view').textContent = data.sanitized_text; // Text content to show raw
+                document.getElementById('sanitized-view').innerHTML = data.sanitized_html; // Use HTML to show highlights
                 currentSanitizedText = data.sanitized_text;
 
                 const count = data.found_count;
@@ -452,6 +483,99 @@
             clearInterval(loadingInterval);
             document.getElementById('loading-text').innerText = "Process Complete.";
         }
+        // --- Demo Mode Logic ---
+        const DEMO_MODE = {{ demo_mode | tojson }};
+        let availableScenarios = {};
+
+        if (DEMO_MODE) {
+            fetchScenarios();
+        }
+
+        async function fetchScenarios() {
+            try {
+                const res = await fetch('/get_scenarios');
+                const data = await res.json();
+                availableScenarios = data;
+                renderScenarioButtons(data);
+            } catch (e) {
+                console.error("Failed to load scenarios", e);
+            }
+        }
+
+        function renderScenarioButtons(scenarios) {
+            const container = document.getElementById('scenario-container');
+            container.innerHTML = "";
+
+            Object.keys(scenarios).forEach(key => {
+                const s = scenarios[key];
+                const btn = document.createElement('button');
+                btn.className = 'btn-secondary scenario-btn';
+                btn.innerText = s.title;
+                btn.onclick = () => loadScenario(key);
+                container.appendChild(btn);
+            });
+        }
+
+        function loadScenario(key) {
+            const s = availableScenarios[key];
+            if (!s) return;
+
+            // Unlock Review Button
+            document.getElementById('btn-review').disabled = false;
+
+            // Highlight active button
+            document.querySelectorAll('.scenario-btn').forEach(b => b.style.border = "1px solid #444");
+            event.target.style.border = "1px solid var(--accent)";
+
+            // Populate Text
+            document.getElementById('op-report').value = s.text;
+
+            // Reset inputs first
+            document.querySelectorAll('.cpt-code').forEach(i => i.value = "");
+            document.querySelectorAll('.cpt-units').forEach(i => i.value = "1");
+            document.querySelectorAll('.dx').forEach(i => i.value = "");
+
+            // Populate CPTs
+            const inputs = document.querySelectorAll('.cpt-code');
+            const unitInputs = document.querySelectorAll('.cpt-units');
+
+            s.cpt.forEach((item, index) => {
+                if (inputs[index]) {
+                    inputs[index].value = item.code;
+                    unitInputs[index].value = item.user_units;
+                }
+            });
+
+            // Populate Dx
+            const dxInputs = document.querySelectorAll('.dx');
+            s.dx.forEach((code, index) => {
+                if (dxInputs[index]) dxInputs[index].value = code;
+            });
+
+            // Populate Chat Suggestions
+            setupDemoChat(s.chat_questions);
+        }
+
+        function setupDemoChat(questions) {
+            const promo = document.getElementById('demo-questions-promo');
+            if (promo) {
+                promo.innerHTML = "<strong>Suggested Questions:</strong><br>";
+                questions.forEach(q => {
+                    const btn = document.createElement('button');
+                    btn.innerText = q;
+                    btn.className = 'btn-secondary btn-sm';
+                    btn.style.margin = "5px";
+                    btn.style.padding = "5px 10px";
+                    btn.style.fontSize = "0.85em";
+                    btn.onclick = () => {
+                        document.getElementById('chat-input').value = q;
+                        sendQuestion();
+                    };
+                    promo.appendChild(btn);
+                });
+            }
+        }
+
     </script>
 </body>
 

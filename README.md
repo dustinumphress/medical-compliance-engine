@@ -4,7 +4,7 @@ A comprehensive, AI-powered medical coding audit system designed to verify CPT c
 
 ## 🚀 Key Features
 
-*   **AI-Powered Verification**: Uses Anthropic's Claude 4.5 Sonnet to analyze sanitized clinical text and verify if documentation supports billed CPT codes.
+*   **AI-Powered Verification**: Uses **Anthropic Claude 3.5 Sonnet** (via direct API or **AWS Bedrock**) to analyze sanitized clinical text and verify if documentation supports billed CPT codes.
 *   **Regulatory Compliance Engine**:
     *   **NCCI Checks**: Deterministic checks for National Correct Coding Initiative (NCCI) bundling edits (PTP).
     *   **MUE Checks**: Enforces Medically Unlikely Edits (MUE) limits based on user-provided units.
@@ -32,17 +32,7 @@ The project follows a **3-Layer Architecture** (Directive, Orchestration, Execut
     *   `cpt_data.py`: Custom/Augmented CPT rule definitions.
 *   **`coding_rules.db`**: SQLite database storing NCCI edits, MUE limits, and Official CPT descriptions.
 
-## ☁️ Cloud Architecture Roadmap (AWS)
 
-This project is designed to be deployed as a Serverless Microservice on AWS.
-
-*   **Compute**: Dockerized Lambda function (Eer) running the `medical_audit.py` logic.
-*   **Orchestration**: API Gateway to handle RESTful audit requests.
-*   **Security**:
-    *   `ANTHROPIC_API_KEY` stored in **AWS Secrets Manager**.
-    *   **AWS WAF** (Web Application Firewall) to rate-limit requests.
-*   **Privacy**: Presidio redaction runs within the Lambda execution environment (ephemeral), ensuring PHI is never persisted to disk.
-*   **CI/CD**: GitHub Actions pipeline to build the Docker image and push to Amazon ECR (Elastic Container Registry) on merge.
 
 ## 📦 Setup & Installation
 
@@ -53,10 +43,35 @@ This project is designed to be deployed as a Serverless Microservice on AWS.
     python -m spacy download en_core_web_lg
     ```
 3.  **Environment Variables**:
-    Create a `.env` file in the root directory:
+    Create a `.env` file in the root directory. This project supports both **Anthropic Direct API** and **AWS Bedrock**.
+
+    **Option A: AWS Bedrock (Recommended for Demo/Enterprise)**
     ```env
+    LLM_PROVIDER=bedrock
+    AWS_REGION=us-east-1
+    AWS_ACCESS_KEY_ID=your_access_key
+    AWS_SECRET_ACCESS_KEY=your_secret_key
+    
+    # Optional: Enable Demo Mode
+    DEMO_MODE=true
+    ```
+
+    **Option B: Anthropic Direct**
+    ```env
+    LLM_PROVIDER=anthropic
     ANTHROPIC_API_KEY=sk-ant-...
     ```
+
+## 🧪 AWS Demo Mode
+
+For recruiters, stakeholders, or testing without incurring LLM costs, you can enable **Demo Mode**.
+
+*   **Activation**: Set `DEMO_MODE=true` in `.env`.
+*   **Features**:
+    *   **Scenario Selector**: Pre-loaded plastic surgery scenarios (e.g., "CPT Denial", "Diagnosis Specificity Error", "Clean Audit") are available at the top of the UI.
+    *   **Locked Inputs**: Prevents custom text entry to ensure predictable demos.
+    *   **Mock Chat**: The "Ask the Auditor" chat interface disconnects from the live LLM and serves **canned, pre-written answers** for specific questions. This ensures **$0.00 cost** for chat interactions during demos while still showing off the UI.
+    *   **Fake PHI Injection**: Scenarios include fake patient data (e.g., "John Doe") to demonstrate the live PHI redaction engine safely.
 
 ## 📥 Data Initialization (ETL Pipeline)
 
@@ -193,3 +208,52 @@ This tool uses Artificial Intelligence (LLMs) to analyze medical documentation. 
 *   **Not Professional Coding Advice**: Results are for support/audit efficiency and must be verified by a certified medical coder (CPC/CCS).
 *   **Double Check**: Always validate findings against official AMA CPT® books, CMS guidelines, and payer-specific policies.
 
+
+## ☁️ Serverless Deployment (AWS Lambda)
+
+This project includes a **Serverless Deployment** configuration (`serverless_deploy.yaml`) to run the application on **AWS Lambda** via a container image. This offers a highly scalable, specific-cost-only (pay-per-request) hosting solution.
+
+### 1. Prerequisites
+*   **AWS CLI** installed and configured (`aws configure`).
+*   **AWS Bedrock Access** enabled in `us-east-1` (or your target region).
+*   **Local Database**: Ensure you have run `python execution/ingest_coding_rules.py` locally. The deployment "bakes" this database into the Docker image.
+
+### 2. Deployment Steps
+
+#### Step A: Push Image to AWS ECR
+You must upload the properly built Docker image (containing the coding rules database) to Amazon ECR.
+
+```bash
+# 1. Create Repo (One time)
+aws ecr create-repository --repository-name medical-audit-demo
+
+# 2. Login
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <YOUR_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
+
+# 3. Build & Push
+docker build -t medical-audit-demo .
+docker tag medical-audit-demo:latest <YOUR_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/medical-audit-demo:latest
+docker push <YOUR_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/medical-audit-demo:latest
+```
+
+#### Step B: Launch Infrastructure
+Use the included automated script to deploy the CloudFormation stack. This sets up the Lambda, IAM Role (with Bedrock permissions), and Public Function URL.
+
+```powershell
+.\deploy.ps1
+```
+*Paste your full ECR Image URI when prompted.*
+
+#### Step C: Fast Updates (Code Only)
+For rapid iteration (changing Python/HTML/CSS only), use the update script. It rebuilds, pushes, and updates the Lambda function code without re-running CloudFormation.
+
+```powershell
+.\update.ps1
+```
+*(Note: Use `deploy.ps1` if you change `serverless_deploy.yaml` settings like Memory or Timeout.)*
+
+### 3. Architecture
+The CloudFormation template (`serverless_deploy.yaml`) creates:
+1.  **AWS Lambda Function**: Runs the flask app (adapter pattern).
+2.  **IAM Role**: Auto-assigns `AmazonBedrockFullAccess` so the app can invoke the LLM without managing API keys.
+3.  **Function URL**: A public HTTPS endpoint to access the demo.

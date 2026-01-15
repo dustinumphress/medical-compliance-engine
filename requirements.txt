@@ -6,3 +6,4 @@ presidio-anonymizer
 spacy
 requests
 pytest
+boto3
