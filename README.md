@@ -4,7 +4,7 @@ A comprehensive, AI-powered medical coding audit system designed to verify CPT c
 
 ## 🚀 Key Features
 
-*   **AI-Powered Verification**: Uses Anthropic's Claude 3.5 Sonnet to analyze sanitized clinical text and verify if documentation supports billed CPT codes.
+*   **AI-Powered Verification**: Uses Anthropic's Claude 4.5 Sonnet to analyze sanitized clinical text and verify if documentation supports billed CPT codes.
 *   **Regulatory Compliance Engine**:
     *   **NCCI Checks**: Deterministic checks for National Correct Coding Initiative (NCCI) bundling edits (PTP).
     *   **MUE Checks**: Enforces Medically Unlikely Edits (MUE) limits based on user-provided units.
