@@ -14,7 +14,7 @@ import itertools
 import re
 
 # Load environment variables
-load_dotenv(override=True)
+load_dotenv(override=False)
 
 # Configure Logging
 import logging
@@ -23,12 +23,12 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-MODEL_NAME = "-sonnet-4-5-20250929claude" # Correct stable version 
+MODEL_NAME = "claude-sonnet-4-5-20250929" # User configured 4.5 Sonnet
 
 # Bedrock Configuration
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "bedrock") # Default to bedrock for AWS host
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
-BEDROCK_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-sonnet-4-5-20250929-v1:0")
+BEDROCK_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "us.anthropic.claude-sonnet-4-5-20250929-v1:0")
 
 def query_bedrock(prompt, system_prompt):
     """
@@ -58,11 +58,20 @@ def query_bedrock(prompt, system_prompt):
         )
         
         response_body = json.loads(response.get("body").read())
-        return response_body.get("content")[0].get("text")
+        content_list = response_body.get("content", [])
+        if not content_list:
+             logger.error(f"Bedrock returned empty content list. Full Body: {response_body}")
+             return None
+             
+        text_content = content_list[0].get("text")
+        if not text_content:
+             logger.error(f"Bedrock returned empty text. Full Body: {response_body}")
+             
+        return text_content
         
     except Exception as e:
         logger.error(f"Error querying AWS Bedrock: {e}")
-        return None
+        raise e
 
 def query_anthropic(prompt, system_prompt):
     """
@@ -74,7 +83,7 @@ def query_anthropic(prompt, system_prompt):
     # Fallback to Direct Anthropic API
     if not ANTHROPIC_API_KEY:
         logger.error("ANTHROPIC_API_KEY not found in .env file.")
-        return None
+        raise ValueError("ANTHROPIC_API_KEY not found in .env file.")
         
     logger.debug(f"Loaded API Key: {ANTHROPIC_API_KEY[:4]}... (Length: {len(ANTHROPIC_API_KEY)})")
     
@@ -93,7 +102,7 @@ def query_anthropic(prompt, system_prompt):
         return response.content[0].text
     except Exception as e:
         logger.error(f"Error querying Anthropic: {e}")
-        return None
+        raise e
 
 from execution.cpt_data import CPT_DEFINITIONS
 
@@ -247,6 +256,11 @@ def audit_medical_record(raw_text, cpt_list, diagnosis_codes, units_map=None):
     logger.info("Step 1: Sanitizing PHI locally...")
     sanitized_text, _ = sanitize_text(raw_text)
     logger.info(f"Sanitized Text Preview: {sanitized_text[:100]}...")
+    
+    # Log Active Provider
+    logger.info(f"Active LLM Provider: {LLM_PROVIDER}")
+    if LLM_PROVIDER.lower() == "bedrock":
+        logger.info(f"Bedrock Region: {AWS_REGION}, Model: {BEDROCK_MODEL_ID}")
     
     # Retrieve definitions for all codes
     # Priority: 

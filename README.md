@@ -236,6 +236,10 @@ docker tag medical-audit-demo:latest <YOUR_ACCOUNT_ID>.dkr.ecr.us-east-1.amazona
 docker push <YOUR_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/medical-audit-demo:latest
 ```
 
+> [!TIP]
+> **Cost Optimization**: I recommend setting a **Lifecycle Policy** on your ECR repository to automatically delete untagged images older than 1 day. This prevents storage costs from accumulating during rapid development (since `update.ps1` pushes new images frequently).
+
+
 #### Step B: Launch Infrastructure
 Use the included automated script to deploy the CloudFormation stack. This sets up the Lambda, IAM Role (with Bedrock permissions), and Public Function URL.
 
@@ -244,13 +248,21 @@ Use the included automated script to deploy the CloudFormation stack. This sets 
 ```
 *Paste your full ECR Image URI when prompted.*
 
-#### Step C: Fast Updates (Code Only)
-For rapid iteration (changing Python/HTML/CSS only), use the update script. It rebuilds, pushes, and updates the Lambda function code without re-running CloudFormation.
+### 3. Fast Updates (Code & Config)
+For rapid iteration, use the update script. It rebuilds, pushes, and updates the Lambda function code AND configuration.
 
+**Option A: Deploy Demo Mode (Default)**
+Safe mode. Uses canned answers, no LLM costs.
 ```powershell
 .\update.ps1
 ```
-*(Note: Use `deploy.ps1` if you change `serverless_deploy.yaml` settings like Memory or Timeout.)*
+
+**Option B: Deploy Live Production (Real Billing)**
+Enables live LLM calls (AWS Bedrock).
+```powershell
+.\update.ps1 -Prod
+```
+
 
 ### 3. Architecture
 The CloudFormation template (`serverless_deploy.yaml`) creates:

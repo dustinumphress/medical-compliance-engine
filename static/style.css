@@ -350,3 +350,68 @@ mark.phi-replacement {
     font-weight: 600;
     border: 1px solid #10b981;
 }
+
+/* --- Mobile Responsiveness --- */
+@media (max-width: 768px) {
+
+    /* Container Padding */
+    .container {
+        padding: 5px;
+    }
+
+    /* Stack Code Inputs Vertically */
+    .code-inputs {
+        grid-template-columns: 1fr;
+        /* Stack CPT and Dx */
+        gap: 10px;
+    }
+
+    /* Stack Scenarios Buttons */
+    .demo-banner div {
+        flex-direction: column;
+    }
+
+    .demo-banner button {
+        width: 100%;
+    }
+
+    /* Adjust Card Padding */
+    .card {
+        padding: 15px;
+    }
+
+    /* Modal Mobile */
+    .modal-content.large-modal {
+        width: 100%;
+        height: 100%;
+        border-radius: 0;
+    }
+
+    .modal-body.split-view {
+        flex-direction: column;
+        /* Stack panels */
+    }
+
+    .panel {
+        height: 50%;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+    }
+
+    /* Table Font Size & Layout */
+    .audit-table th,
+    .audit-table td {
+        padding: 8px;
+        /* Reduce padding */
+        font-size: 0.85em;
+        /* Smaller text */
+    }
+
+    .audit-table th {
+        white-space: nowrap;
+        /* Keep headers on one line if possible, or wrap them */
+    }
+
+    /* Hide Rationale on very small screens? No, just let it scroll. */
+    /* Ensure Table Container Scrolls (Handled in HTML) */
+}

@@ -36,6 +36,8 @@ Resources:
       Environment:
         Variables:
           DEMO_MODE: "True"
+          LLM_PROVIDER: "bedrock"
+          BEDROCK_MODEL_ID: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
   AuditFunctionUrl:
     Type: AWS::Lambda::Url

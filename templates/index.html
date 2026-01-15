@@ -402,7 +402,8 @@
             </div>`;
             }
 
-            document.getElementById('audit-table-container').innerHTML = html;
+            // Wrap table in overflow container for mobile
+            document.getElementById('audit-table-container').innerHTML = `<div style="overflow-x:auto;">${html}</div>`;
 
             if (data.diagnosis_analysis) {
                 const dxText = data.diagnosis_analysis.toLowerCase();

@@ -1,10 +1,20 @@
 # update.ps1
+param([switch]$Prod)
 
 # --- CONFIGURATION ---
 $Region = "us-east-1"
 $RepoName = "medical-audit-demo"
 $LambdaName = "MedicalAuditDemo"
 # ---------------------
+
+$DemoVal = "True"
+if ($Prod) {
+    $DemoVal = "False"
+    Write-Host "⚠️  DEPLOYING TO PRODUCTION (LIVE BILLING ENABLED) ⚠️" -ForegroundColor Red
+}
+else {
+    Write-Host "ℹ️  Deploying in DEMO MODE (Safe Defaults)" -ForegroundColor DarkGray
+}
 
 Write-Host "🚀 STARTING FAST DEPLOY..." -ForegroundColor Cyan
 
@@ -38,9 +48,13 @@ docker tag "$RepoName`:latest" $ImageUri
 docker push $ImageUri
 if ($LASTEXITCODE -ne 0) { Write-Error "Push Failed"; exit }
 
-# 5. Update Lambda
+# 5. Update Lambda Code
 Write-Host "5. Updating Lambda Function..." -ForegroundColor Yellow
 aws lambda update-function-code --function-name $LambdaName --image-uri $ImageUri > $null
+
+# 6. Update Configuration
+Write-Host "6. Updating Configuration (DemoMode=$DemoVal)..." -ForegroundColor Yellow
+aws lambda update-function-configuration --function-name $LambdaName --environment "Variables={DEMO_MODE=$DemoVal,LLM_PROVIDER=bedrock,BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0}" > $null
 
 Write-Host "--------------------------------------------------" -ForegroundColor Green
 Write-Host "✅ DONE! Your changes are live." -ForegroundColor Green
