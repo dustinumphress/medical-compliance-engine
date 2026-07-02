@@ -7,3 +7,24 @@ __pycache__
 *.pyd
 .DS_Store
 .env
+
+# Secrets — never bake credentials into the image
+credentials.json
+token.json
+
+# Caches and project meta
+.pytest_cache
+.claude
+.gitignore
+
+# Not needed at runtime
+docs
+tests
+deploy
+*.md
+*.png
+deploy.ps1
+update.ps1
+run_app.ps1
+scan_secrets.ps1
+serverless_deploy.yaml

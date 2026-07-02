@@ -1,10 +1,26 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: "Deploy Medical Audit Engine on Lambda (Serverless) with Bedrock Access"
 
+# Note: long-form intrinsics (Fn::Ref/Fn::GetAtt) are used instead of !Ref/!GetAtt
+# so the pre-commit check-yaml hook can parse this file.
+
 Parameters:
   ImageUri:
     Type: String
     Description: "The URI of the Docker image in ECR"
+  FunctionUrlAuthType:
+    Type: String
+    Description: "AWS_IAM requires SigV4-signed requests; NONE makes the demo publicly reachable (anyone can invoke it and spend Bedrock tokens)."
+    Default: AWS_IAM
+    AllowedValues:
+      - AWS_IAM
+      - NONE
+
+Conditions:
+  IsPublic:
+    Fn::Equals:
+      - Ref: FunctionUrlAuthType
+      - "NONE"
 
 Resources:
   LambdaExecutionRole:
@@ -19,7 +35,19 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-        - arn:aws:iam::aws:policy/AmazonBedrockFullAccess
+      Policies:
+        - PolicyName: BedrockInvokeOnly
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource:
+                  # Anthropic foundation models only — not the full Bedrock surface
+                  - arn:aws:bedrock:*::foundation-model/anthropic.*
+                  - Fn::Sub: "arn:aws:bedrock:*:${AWS::AccountId}:inference-profile/*.anthropic.*"
 
   AuditFunction:
     Type: AWS::Lambda::Function
@@ -27,8 +55,10 @@ Resources:
       FunctionName: MedicalAuditDemo
       PackageType: Image
       Code:
-        ImageUri: !Ref ImageUri
-      Role: !GetAtt LambdaExecutionRole.Arn
+        ImageUri:
+          Ref: ImageUri
+      Role:
+        Fn::GetAtt: [LambdaExecutionRole, Arn]
       Timeout: 120
       MemorySize: 2048
       Architectures:
@@ -37,28 +67,34 @@ Resources:
         Variables:
           DEMO_MODE: "True"
           LLM_PROVIDER: "bedrock"
-          BEDROCK_MODEL_ID: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+          BEDROCK_MODEL_ID: "anthropic.claude-sonnet-5"
 
   AuditFunctionUrl:
     Type: AWS::Lambda::Url
     Properties:
-      TargetFunctionArn: !Ref AuditFunction
-      AuthType: NONE
+      TargetFunctionArn:
+        Ref: AuditFunction
+      AuthType:
+        Ref: FunctionUrlAuthType
       Cors:
-        AllowOrigins: 
+        AllowOrigins:
           - "*"
-        AllowMethods: 
+        AllowMethods:
           - "POST"
 
+  # Only created when the URL is deliberately deployed public
   PublicAccessPermission:
     Type: AWS::Lambda::Permission
+    Condition: IsPublic
     Properties:
-      FunctionName: !Ref AuditFunction
+      FunctionName:
+        Ref: AuditFunction
       Principal: "*"
       Action: lambda:InvokeFunctionUrl
       FunctionUrlAuthType: NONE
 
 Outputs:
   DemoUrl:
-    Description: "The Public URL for your Medical Audit Demo"
-    Value: !GetAtt AuditFunctionUrl.FunctionUrl
+    Description: "The URL for your Medical Audit Demo"
+    Value:
+      Fn::GetAtt: [AuditFunctionUrl, FunctionUrl]
