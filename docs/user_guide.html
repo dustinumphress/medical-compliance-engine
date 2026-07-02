@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Medical Compliance Engine — User Guide</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #161b23;
+    --panel-2: #1c2330;
+    --ink: #d8dee9;
+    --ink-dim: #8b96a8;
+    --accent: #4fd1c5;       /* clinical teal */
+    --accent-warm: #e8b34b;  /* chart amber */
+    --danger: #f07178;
+    --ok: #7ec699;
+    --border: #2a3342;
+    --mono: "Cascadia Code", "Consolas", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.65 Georgia, "Times New Roman", serif;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 28px 80px; }
+
+  header.hero {
+    border-bottom: 1px solid var(--border);
+    padding: 56px 0 36px;
+    margin-bottom: 8px;
+  }
+  .hero .kicker {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 3px;
+    text-transform: uppercase; color: var(--accent);
+  }
+  .hero h1 {
+    font-size: 40px; font-weight: normal; letter-spacing: -0.5px;
+    margin: 10px 0 6px; color: #fff;
+  }
+  .hero h1 em { font-style: italic; color: var(--accent-warm); }
+  .hero p.sub { color: var(--ink-dim); font-size: 17px; max-width: 640px; }
+
+  nav.toc {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 24px; margin: 28px 0 44px;
+    columns: 2; column-gap: 32px;
+  }
+  nav.toc a {
+    display: block; color: var(--ink); text-decoration: none;
+    padding: 4px 0; font-size: 15px; break-inside: avoid;
+  }
+  nav.toc a::before { content: "§ "; color: var(--accent); font-family: var(--mono); }
+  nav.toc a:hover { color: var(--accent); }
+
+  section { margin-bottom: 56px; }
+  h2 {
+    font-size: 26px; font-weight: normal; color: #fff;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px; margin-bottom: 20px;
+  }
+  h2 .no { color: var(--accent); font-family: var(--mono); font-size: 18px; margin-right: 10px; }
+  h3 { font-size: 18px; color: var(--accent-warm); margin: 26px 0 10px; font-weight: normal; font-style: italic; }
+  p { margin-bottom: 14px; }
+  p, li { color: var(--ink); }
+  ul, ol { margin: 0 0 16px 26px; }
+  li { margin-bottom: 7px; }
+  strong { color: #fff; }
+  a { color: var(--accent); }
+
+  code, .k {
+    font-family: var(--mono); font-size: 13.5px;
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 4px; padding: 1px 6px; color: var(--accent-warm);
+  }
+  pre {
+    background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+    border-radius: 8px; padding: 16px 20px; overflow-x: auto;
+    font-family: var(--mono); font-size: 13.5px; line-height: 1.6;
+    margin: 14px 0 20px; color: #c3ccd9;
+  }
+  pre b { color: var(--accent); font-weight: normal; }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 16px 0 22px;
+    font-size: 14.5px;
+  }
+  th {
+    text-align: left; font-family: var(--mono); font-size: 12px;
+    letter-spacing: 1px; text-transform: uppercase; color: var(--ink-dim);
+    border-bottom: 2px solid var(--border); padding: 8px 12px 8px 0;
+  }
+  td { border-bottom: 1px solid var(--border); padding: 10px 12px 10px 0; vertical-align: top; }
+  td:first-child { white-space: nowrap; }
+
+  .callout {
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 18px; margin: 18px 0; background: var(--panel);
+  }
+  .callout.warn { border-left: 3px solid var(--danger); }
+  .callout.tip  { border-left: 3px solid var(--ok); }
+  .callout.note { border-left: 3px solid var(--accent-warm); }
+  .callout .tag {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 2px;
+    text-transform: uppercase; display: block; margin-bottom: 4px;
+  }
+  .warn .tag { color: var(--danger); } .tip .tag { color: var(--ok); } .note .tag { color: var(--accent-warm); }
+
+  .badge {
+    font-family: var(--mono); font-size: 12px; border-radius: 4px;
+    padding: 2px 8px; white-space: nowrap;
+  }
+  .b-high { background: #3b1518; color: #ff9da2; border: 1px solid #6b2a2f; }
+  .b-med  { background: #3b2f12; color: #ffd98a; border: 1px solid #6b5722; }
+  .b-none { background: #14301f; color: #8fe0ad; border: 1px solid #275c3b; }
+
+  footer {
+    border-top: 1px solid var(--border); padding-top: 24px;
+    color: var(--ink-dim); font-size: 13.5px; font-style: italic;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <span class="kicker">Medical Compliance Engine</span>
+  <h1>User <em>Guide</em></h1>
+  <p class="sub">Audit operative reports against CPT codes, catch denials before they happen,
+  and generate payer-ready appeal letters — with deterministic CMS rules doing the enforcement
+  and Claude doing the judgment.</p>
+</header>
+
+<nav class="toc">
+  <a href="#overview">How it works</a>
+  <a href="#setup">First-time setup</a>
+  <a href="#running">Running the app</a>
+  <a href="#workflow">Auditing a report</a>
+  <a href="#results">Reading the results</a>
+  <a href="#modifiers">Modifiers</a>
+  <a href="#appeals">Appeal letters</a>
+  <a href="#models">Models &amp; costs</a>
+  <a href="#updates">Keeping it updated</a>
+  <a href="#cli">Command-line use</a>
+  <a href="#deploy">Deploying to AWS</a>
+  <a href="#trouble">Troubleshooting</a>
+</nav>
+
+<section id="overview">
+  <h2><span class="no">01</span>How it works</h2>
+  <p>The engine layers four checks over every audit, in a strict trust hierarchy —
+  higher layers override lower ones:</p>
+  <ol>
+    <li><strong>Rules-engine exclusions</strong> (HARD FAIL) — known denial triggers, e.g. cosmetic-intent
+        language on CPT 15730. Negation-aware ("no cosmetic intent" won't fire) and carve-outs for
+        legitimate phrases like "aesthetic subunit."</li>
+    <li><strong>NCCI / MUE database checks</strong> — 2.3M CMS bundling edits (filtered to currently-active
+        edits only) and 15K unit limits with MAI severity, queried deterministically.</li>
+    <li><strong>Rules-engine requirements</strong> — missing "magic words" (deep fascia, vascular pedicle,
+        named muscle) force a MEDIUM alert even if the AI passes the code.</li>
+    <li><strong>Claude verification</strong> — does the narrative actually support each code? Quotes its
+        evidence, independently counts supportable units, and validates diagnosis specificity.</li>
+  </ol>
+  <p>PHI never leaves your machine un-redacted: Microsoft Presidio runs <em>locally</em> and you review
+  the redacted text before anything is sent to the API.</p>
+</section>
+
+<section id="setup">
+  <h2><span class="no">02</span>First-time setup</h2>
+  <h3>Requirements</h3>
+  <ul>
+    <li><strong>Python 3.12</strong> — not 3.13/3.14; the PHI engine (spaCy/Presidio) breaks on newer versions</li>
+    <li>An Anthropic API key, <em>or</em> AWS credentials with Bedrock access</li>
+  </ul>
+  <h3>Install</h3>
+<pre>py -3.12 -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+<b># spaCy's downloader can fail with new pip — install the model wheel directly:</b>
+.venv\Scripts\python.exe -m pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl</pre>
+  <h3>Configure <code>.env</code></h3>
+<pre><b># Option A — Anthropic direct (required for Fable 5)</b>
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+
+<b># Option B — AWS Bedrock</b>
+LLM_PROVIDER=bedrock
+AWS_REGION=us-east-1
+BEDROCK_MODEL_ID=anthropic.claude-sonnet-5
+
+<b># Real use = demo mode off</b>
+DEMO_MODE=false</pre>
+  <div class="callout note">
+    <span class="tag">Fresh clones only</span>
+    Two files are deliberately <strong>not in the public repo</strong> because they contain
+    AMA-copyrighted CPT descriptor text: <code>execution/clinical_policies.py</code> and
+    <code>execution/cpt_data.py</code>. On this machine they already exist. On a fresh clone,
+    copy the <code>.example.py</code> stubs and fill them in — the app still runs without them,
+    falling back to the CMS short descriptions in the database.
+  </div>
+  <h3>Build the rules database (fresh clones)</h3>
+  <p><code>coding_rules.db</code> is a local artifact. Download the CMS files and run
+  <code>execution/ingest_coding_rules.py</code> — full steps in
+  <code>directives/refresh_coding_data.md</code> (§ 09 below).</p>
+</section>
+
+<section id="running">
+  <h2><span class="no">03</span>Running the app</h2>
+<pre>.venv\Scripts\python.exe app.py</pre>
+  <p>Then open <a href="http://localhost:5000">http://localhost:5000</a>.
+  Alternatively, <code>run_app.ps1</code> runs the Dockerized version (starts Docker Desktop if needed).</p>
+  <p>Verify everything's healthy any time with the test suite:</p>
+<pre>.venv\Scripts\python.exe -m pytest tests\ -q      <b># expect: 31 passed</b></pre>
+</section>
+
+<section id="workflow">
+  <h2><span class="no">04</span>Auditing a report</h2>
+  <ol>
+    <li><strong>Paste the operative report.</strong> Scrub obvious PHI first — the redaction engine is a
+        safety net, not a substitute.</li>
+    <li><strong>Enter CPT codes</strong> with billed units. The <em>Mod</em> field is optional —
+        leave it blank for an unmodified claim; enter comma-separated modifiers
+        (<code>59, XS</code>) only when they're actually on the claim.</li>
+    <li><strong>Enter ICD-10 diagnosis codes.</strong></li>
+    <li><strong>Pick a model.</strong> The dropdown loads the live model list with pricing
+        (see § 08). Sonnet 5 is the everyday default; Fable 5 for the hardest calls.</li>
+    <li><strong>Review &amp; Audit.</strong> The redaction modal shows the original with highlights and
+        the sanitized version — edit the sanitized text if Presidio missed something, then approve.</li>
+    <li>Results render per code; the <strong>chat</strong> box below lets you ask the auditor follow-ups
+        ("why did 15734 fail?", "what would make this pass?").</li>
+  </ol>
+</section>
+
+<section id="results">
+  <h2><span class="no">05</span>Reading the results</h2>
+  <table>
+    <tr><th>Alert</th><th>Meaning</th><th>What to do</th></tr>
+    <tr><td><span class="badge b-high">HIGH – NCCI BUNDLING</span></td>
+        <td>Active CMS edit bundles this code into another billed code.</td>
+        <td>Indicator 1: add 59/XS <em>if</em> a distinct service is documented. Indicator 0: cannot be billed together, period.</td></tr>
+    <tr><td><span class="badge b-high">HIGH – MUE EXCEEDED</span></td>
+        <td>Billed units exceed the CMS limit. Rationale explains the MAI class.</td>
+        <td>MAI 2 is an absolute daily max. MAI 3 is appealable with documentation.</td></tr>
+    <tr><td><span class="badge b-high">HIGH – SYSTEM GUARDRAIL</span></td>
+        <td>A hard exclusion fired (e.g. cosmetic-intent language on 15730).</td>
+        <td>Fix the narrative or the code — this pattern is a known auto-denial.</td></tr>
+    <tr><td><span class="badge b-med">MEDIUM – NCCI (MODIFIER APPLIED)</span></td>
+        <td>Bundling edit exists but your 59/X-modifier can override it.</td>
+        <td>Confirm the note documents the distinct service/site the modifier claims.</td></tr>
+    <tr><td><span class="badge b-med">MEDIUM – MISSING KEYWORDS</span></td>
+        <td>Required documentation concept absent (deep fascia, named muscle…).</td>
+        <td>Request an addendum before submitting, or expect a documentation denial.</td></tr>
+    <tr><td><span class="badge b-med">UNIT DISCREPANCY</span></td>
+        <td>The AI's independent unit count differs from what you billed.</td>
+        <td>Re-measure against the note; adjust units or gather support.</td></tr>
+    <tr><td><span class="badge b-none">NONE</span></td>
+        <td>No deterministic or AI risk found.</td>
+        <td>Still verify — this is audit support, not a guarantee.</td></tr>
+  </table>
+  <p>Each row also shows <strong>documentation status</strong> (PASS / PARTIAL / FAIL), the
+  <strong>evidence quote</strong> pulled from your note, and calculated vs. billed units. Below the
+  table: diagnosis-specificity analysis, documentation-improvement advice, and the audit's
+  token usage with estimated dollar cost.</p>
+</section>
+
+<section id="modifiers">
+  <h2><span class="no">06</span>Modifiers</h2>
+  <p><strong>Modifiers are always optional.</strong> A blank field is a normal claim and is never
+  penalized. When you do enter one:</p>
+  <ul>
+    <li>Distinct-service modifiers — <code>59</code>, <code>XE</code>, <code>XS</code>,
+        <code>XP</code>, <code>XU</code> — on the <em>component</em> code of an indicator-1 NCCI pair
+        downgrade the alert from HIGH to MEDIUM, with a reminder that the note must support the
+        distinct service.</li>
+    <li>Indicator-0 edits <strong>cannot</strong> be overridden by any modifier — the alert stays HIGH
+        and says so explicitly.</li>
+    <li>Other modifiers (LT/RT, 50, etc.) are passed to the AI as claim context but don't change
+        deterministic alerts.</li>
+  </ul>
+</section>
+
+<section id="appeals">
+  <h2><span class="no">07</span>Appeal letters</h2>
+  <p>After any audit, the <strong>Appeal Letter</strong> panel appears under the results:</p>
+  <ol>
+    <li>Choose one CPT code or "All billed codes."</li>
+    <li>Optionally paste the payer's denial reason — a remark code (<code>CO-50</code>,
+        <code>CO-97</code>) or the letter's own language. Without it, the engine anticipates the most
+        likely denial rationale from the audit findings.</li>
+    <li>Generate (30–60s). The letter quotes your operative documentation, cites the applicable
+        policy excerpts, rebuts the denial rationale, and closes with a reprocess request.</li>
+  </ol>
+  <div class="callout warn">
+    <span class="tag">PHI</span>
+    Letters use placeholders — [PATIENT NAME], [CLAIM NUMBER], [DATE OF SERVICE] — because the
+    engine only ever sees redacted text. Fill those in <em>outside</em> the tool; never paste
+    identified patient data back in.
+  </div>
+</section>
+
+<section id="models">
+  <h2><span class="no">08</span>Models &amp; costs</h2>
+  <p>The model dropdown queries the provider's live model list at page load — new models appear
+  automatically, nothing is hardcoded. Prices come from a lookup table by model family
+  (there is no pricing API), so a brand-new family shows "pricing unknown" until the table is
+  updated in <code>execution/medical_audit.py → MODEL_PRICING</code>.</p>
+  <table>
+    <tr><th>Model</th><th>$/MTok in / out</th><th>≈ per audit*</th><th>When to use</th></tr>
+    <tr><td>Claude Sonnet 5</td><td>$3 / $15</td><td>$0.02–0.05</td><td>Everyday audits — fast, precise, the default</td></tr>
+    <tr><td>Claude Opus 4.8</td><td>$5 / $25</td><td>$0.05–0.10</td><td>Complex multi-code cases, nuanced necessity questions</td></tr>
+    <tr><td>Claude Fable 5</td><td>$10 / $50</td><td>$0.13–0.35</td><td>The hardest judgment calls and appeal drafting where stakes are high. Anthropic-direct API only (not Bedrock)</td></tr>
+    <tr><td>Claude Haiku 4.5</td><td>$1 / $5</td><td>&lt;$0.02</td><td>Quick screens of simple claims</td></tr>
+  </table>
+  <p style="color:var(--ink-dim); font-size:13.5px;">*Typical single-note audit ≈ 3–6K input / 1–2K output
+  tokens. Prompt caching cuts repeat costs: re-auditing the same code set reuses the cached policy
+  context (~90% discount on that portion), and chat follow-ups reuse the cached note.</p>
+</section>
+
+<section id="updates">
+  <h2><span class="no">09</span>Keeping it updated</h2>
+  <h3>Quarterly — CMS rules data (most important)</h3>
+  <p>CMS updates NCCI edits and MUE limits every quarter (Jan 1 / Apr 1 / Jul 1 / Oct 1). Stale data
+  means missed edits on new code pairs. Full procedure lives in
+  <code>directives/refresh_coding_data.md</code>; the short version:</p>
+<pre><b># 1. Download to the project root:</b>
+#    - NCCI PTP practitioner files from CMS.gov  (ccipra-*.txt)
+#    - MUE practitioner CSV from CMS.gov         (MCR_MUE_*.csv)
+<b># 2. Rebuild the database:</b>
+.venv\Scripts\python.exe execution\ingest_coding_rules.py
+<b># 3. Verify:</b>
+.venv\Scripts\python.exe -m pytest tests\test_coding_logic.py -q</pre>
+  <h3>Annually — CPT short descriptions</h3>
+  <p>Update the RVU filename in <code>ingest_coding_rules.py</code> to the new year's file
+  (e.g. <code>PPRRVU2027_Jan_nonQPP.txt</code>) and re-run the ingest.</p>
+  <h3>As needed</h3>
+  <ul>
+    <li><strong>Model prices change</strong> → edit <code>MODEL_PRICING</code> in
+        <code>execution/medical_audit.py</code> (model <em>list</em> updates itself)</li>
+    <li><strong>New CPT codes to enforce</strong> → add an entry to <code>CPT_RULES</code> in
+        <code>execution/rules_engine.py</code> (pure data — exclusions + required patterns) and a
+        definition in <code>cpt_data.py</code>; optionally a policy block in
+        <code>clinical_policies.py</code></li>
+    <li><strong>Dependencies</strong> → <code>pip install -U -r requirements.txt</code>, then run the
+        full test suite before trusting results</li>
+  </ul>
+</section>
+
+<section id="cli">
+  <h2><span class="no">10</span>Command-line use</h2>
+<pre>.venv\Scripts\python.exe execution\medical_audit.py ^
+    --cpt 15734 15738 --dx L89.154 ^
+    --file inputs\input_record.txt</pre>
+  <p>Prints a color-coded table with per-code status, risk, evidence, and cost metrics, and writes
+  the full JSON to <code>.tmp/audit_result_latest.json</code>. Put the op report in a text file under
+  <code>inputs/</code> (that folder is git-ignored, so notes never leak into the repo).</p>
+</section>
+
+<section id="deploy">
+  <h2><span class="no">11</span>Deploying to AWS (optional)</h2>
+  <p>The serverless demo path: build the Docker image, push to ECR, then deploy the CloudFormation
+  stack with <code>deploy.ps1</code> (it prompts for the image URI). Notes:</p>
+  <ul>
+    <li>The function URL now defaults to <strong>AWS_IAM auth</strong>. Deploying it public again
+        requires explicitly passing <code>FunctionUrlAuthType=NONE</code> — remember a public URL lets
+        anyone spend your Bedrock tokens.</li>
+    <li>The Lambda role is scoped to <code>bedrock:InvokeModel</code> on Anthropic models only.</li>
+    <li><code>.dockerignore</code> keeps <code>.env</code>, credentials, tests, and docs out of the image.</li>
+    <li>The deployed demo runs with <code>DEMO_MODE=True</code> (canned scenarios, no free-text input,
+        no appeal generation) to prevent abuse.</li>
+  </ul>
+</section>
+
+<section id="trouble">
+  <h2><span class="no">12</span>Troubleshooting</h2>
+  <table>
+    <tr><th>Symptom</th><th>Cause &amp; fix</th></tr>
+    <tr><td>Import error mentioning <code>pydantic</code> / "REGEX"</td>
+        <td>Venv is on Python 3.13/3.14. Rebuild it with <code>py -3.12 -m venv .venv</code> and reinstall.</td></tr>
+    <tr><td><code>spacy download</code> says "requires pip or uv"</td>
+        <td>New-pip incompatibility — install the model wheel directly (command in § 02).</td></tr>
+    <tr><td>Model dropdown shows "Provider default model"</td>
+        <td>The <code>/models</code> query failed — invalid/expired API key (direct) or expired AWS session
+            (Bedrock: run <code>aws login</code> again). The app still works with the default model.</td></tr>
+    <tr><td>Chat or audit returns an API error</td>
+        <td>Check <code>.env</code> credentials and <code>LLM_PROVIDER</code>. Bedrock also requires model
+            access enabled for the region in the AWS console.</td></tr>
+    <tr><td>Fable 5 request refused</td>
+        <td>Fable runs safety classifiers; clinical text occasionally trips false positives. Re-run on
+            Opus 4.8 or Sonnet 5.</td></tr>
+    <tr><td>An NCCI alert looks wrong</td>
+        <td>Check data vintage — <code>SELECT MAX(effective_date) FROM ncci_edits;</code> — and run the
+            quarterly refresh (§ 09). Note the date filter assumes today as date of service.</td></tr>
+  </table>
+</section>
+
+<footer>
+  <p>This tool uses AI and probabilistic generation — results support audit efficiency and must be
+  verified by a certified coder against official AMA CPT®, CMS, and payer sources. It is not medical,
+  legal, or professional coding advice.</p>
+</footer>
+
+</div>
+</body>
+</html>

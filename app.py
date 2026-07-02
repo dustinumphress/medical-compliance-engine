@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'execution'))
 
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory
 import json
 from sanitize_phi import sanitize_text as clean_text_with_presidio
 from execution.medical_audit import audit_medical_record, consult_auditor, list_available_models, generate_appeal
@@ -49,6 +49,10 @@ DEMO_MODE = os.getenv("DEMO_MODE", "False").lower() == "true"
 @app.route('/')
 def home():
     return render_template('index.html', demo_mode=DEMO_MODE)
+
+@app.route('/guide')
+def user_guide():
+    return send_from_directory(os.path.join(app.root_path, 'docs'), 'user_guide.html')
 
 @app.route('/models', methods=['GET'])
 def models_endpoint():
