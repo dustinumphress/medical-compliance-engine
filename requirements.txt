@@ -1,5 +1,5 @@
 ﻿flask
-anthropic
+anthropic[bedrock]>=0.115
 python-dotenv
 presidio-analyzer
 presidio-anonymizer
