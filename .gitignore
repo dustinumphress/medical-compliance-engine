@@ -20,6 +20,11 @@ Thumbs.db
 *.txt
 inputs/
 
+# Contain verbatim AMA-copyrighted CPT descriptor language — kept local only.
+# Public clones use the .example.py stubs; the app degrades gracefully without them.
+execution/clinical_policies.py
+execution/cpt_data.py
+
 !requirements.txt
 !README.txt
 !README.md
