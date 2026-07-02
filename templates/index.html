@@ -67,6 +67,14 @@
                     </div>
                 </div>
 
+                <div class="model-picker" style="margin: 12px 0; display: flex; align-items: center; gap: 8px;">
+                    <label for="model-select" style="font-size: 0.9em; color: #888;">Model:</label>
+                    <select id="model-select"
+                        style="background: #111; color: #ddd; border: 1px solid #333; padding: 6px; border-radius: 4px; flex: 1; max-width: 480px;">
+                        <option value="">Loading models...</option>
+                    </select>
+                </div>
+
                 <div class="actions">
                     <button id="btn-reset" class="btn-secondary" onclick="resetForm()">Reset</button>
                     <button id="btn-review" class="btn-primary" onclick="startReview()" {% if demo_mode %}disabled{%
@@ -81,6 +89,22 @@
 
 
                 <div id="audit-table-container"></div>
+
+                <!-- Appeal Letter Generation -->
+                <div id="appeal-section" style="margin-top: 24px; border-top: 1px solid #333; padding-top: 16px;">
+                    <h3>Appeal Letter</h3>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px;">
+                        <select id="appeal-code"
+                            style="background: #111; color: #ddd; border: 1px solid #333; padding: 6px; border-radius: 4px;">
+                            <option value="">All billed codes</option>
+                        </select>
+                        <input type="text" id="denial-reason"
+                            placeholder="Denial reason (optional — e.g. CO-50, cosmetic exclusion, bundling)"
+                            style="flex: 1; min-width: 240px; background: #111; color: #ddd; border: 1px solid #333; padding: 6px; border-radius: 4px;">
+                        <button class="btn-primary" onclick="generateAppeal()">Generate Appeal Letter</button>
+                    </div>
+                    <div id="appeal-output" class="hidden"></div>
+                </div>
 
                 <!-- Chat Section (Moved) -->
                 <div id="chat-section" class="hidden">
@@ -164,6 +188,7 @@
             <div class="cpt-row">
                 <input type="text" class="code-input cpt-code" placeholder="CPT ${i + 1}">
                 <input type="number" class="code-input cpt-units" placeholder="#" value="1" min="1">
+                <input type="text" class="code-input cpt-mods" placeholder="Mod (opt)" title="Optional modifiers, comma-separated (e.g. 59, XS). Leave blank if none." style="max-width: 90px;">
             </div>
         `;
         }
@@ -228,8 +253,11 @@
             cptRows.forEach(row => {
                 const code = row.querySelector('.cpt-code').value.trim();
                 const units = parseInt(row.querySelector('.cpt-units').value) || 1;
+                const modsEl = row.querySelector('.cpt-mods');
+                const mods = modsEl ? modsEl.value.trim() : "";
                 if (code) {
-                    cptData.push({ code: code, user_units: units });
+                    // modifiers are optional — blank is a normal claim
+                    cptData.push({ code: code, user_units: units, modifiers: mods });
                 }
             });
 
@@ -242,11 +270,29 @@
                     body: JSON.stringify({
                         text: document.getElementById('sanitized-view').innerText, // Use the manually edited text
                         cpt_codes: cptData, // Send objects now
-                        dx_codes: dxInputs
+                        dx_codes: dxInputs,
+                        model: document.getElementById('model-select').value || null
                     })
                 });
                 const data = await res.json();
                 renderResults(data);
+                // Populate appeal-code picker from the audited codes
+                const appealSel = document.getElementById('appeal-code');
+                appealSel.innerHTML = '<option value="">All billed codes</option>';
+                (data.audit_results || []).forEach(r => {
+                    const opt = document.createElement('option');
+                    opt.value = r.code;
+                    opt.textContent = `CPT ${r.code}`;
+                    appealSel.appendChild(opt);
+                });
+                if (data.usage && data.usage.input_tokens != null) {
+                    const cost = (data.usage.estimated_cost != null)
+                        ? ` · Est. cost: $${data.usage.estimated_cost.toFixed(4)}`
+                        : '';
+                    document.getElementById('audit-table-container').innerHTML +=
+                        `<p style="color:#888; font-size:0.85em; text-align:right; margin-top:8px;">` +
+                        `Model: ${data.usage.model || 'default'} · Tokens: ${data.usage.input_tokens} in / ${data.usage.output_tokens} out${cost}</p>`;
+                }
             } catch (e) {
                 document.getElementById('audit-table-container').innerHTML = `<p class="error">Error: ${e}</p>`;
             } finally {
@@ -311,7 +357,8 @@
                     body: JSON.stringify({
                         context: document.getElementById('sanitized-view').innerText,
                         audit_results: lastAuditResults,
-                        question: question
+                        question: question,
+                        model: document.getElementById('model-select').value || null
                     })
                 });
                 const data = await res.json();
@@ -432,6 +479,27 @@
             } else {
                 document.getElementById('dx-analysis-container').innerHTML = "";
             }
+
+            // --- Cost Badge ---
+            if (data.usage) {
+                const u = data.usage;
+                const inTok = u.input_tokens || 0;
+                const outTok = u.output_tokens || 0;
+                // Pricing: $3.00/M In, $15.00/M Out
+                const cost = ((inTok / 1000000) * 3.00) + ((outTok / 1000000) * 15.00);
+
+                const costHtml = `
+                    <div style="display: flex; gap: 15px; background: rgba(0, 255, 136, 0.1); border: 1px solid var(--accent); padding: 8px 15px; border-radius: 20px; font-size: 0.85em; color: var(--accent); width: fit-content; margin-top: 10px;">
+                        <span><strong>Input:</strong> ${inTok} tok</span>
+                        <span><strong>Output:</strong> ${outTok} tok</span>
+                        <span><strong>Est. Cost:</strong> $${cost.toFixed(4)}</span>
+                    </div>
+                `;
+                // Append to top of results, alongside Dx or just below it.
+                // Let's put it right before the table for visibility
+                const prev = document.getElementById('audit-table-container').innerHTML;
+                document.getElementById('audit-table-container').innerHTML = costHtml + prev;
+            }
         }
 
         function resetForm() {
@@ -440,6 +508,7 @@
             document.getElementById('op-report').value = "";
             document.querySelectorAll('.cpt-code').forEach(i => i.value = "");
             document.querySelectorAll('.cpt-units').forEach(i => i.value = "1");
+            document.querySelectorAll('.cpt-mods').forEach(i => i.value = "");
             document.querySelectorAll('.dx').forEach(i => i.value = "");
 
 
@@ -484,6 +553,72 @@
             clearInterval(loadingInterval);
             document.getElementById('loading-text').innerText = "Process Complete.";
         }
+        // --- Appeal Letter ---
+        async function generateAppeal() {
+            const out = document.getElementById('appeal-output');
+            out.classList.remove('hidden');
+            out.innerHTML = "<em>Drafting appeal letter… (this can take 30–60 seconds)</em>";
+            try {
+                const res = await fetch('/appeal', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        context: document.getElementById('sanitized-view').innerText,
+                        audit_results: lastAuditResults,
+                        code: document.getElementById('appeal-code').value || null,
+                        denial_reason: document.getElementById('denial-reason').value,
+                        model: document.getElementById('model-select').value || null
+                    })
+                });
+                const data = await res.json();
+                if (data.error) {
+                    out.innerHTML = `<span style="color:red">Error: ${data.error}</span>`;
+                    return;
+                }
+                const escaped = data.letter.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+                out.innerHTML = `
+                    <div style="text-align:right; margin-bottom:6px;">
+                        <button onclick="copyAppealLetter(this)" class="btn-secondary" style="font-size:0.85em;">📋 Copy Letter</button>
+                    </div>
+                    <div id="appeal-letter-text" style="white-space:pre-wrap; background:#111; border:1px solid #333; padding:16px; border-radius:6px; line-height:1.6;">${escaped}</div>`;
+            } catch (e) {
+                out.innerHTML = `<span style="color:red">Error: ${e}</span>`;
+            }
+        }
+
+        function copyAppealLetter(btn) {
+            const text = document.getElementById('appeal-letter-text').innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                const original = btn.innerHTML;
+                btn.innerHTML = "✅ Copied!";
+                setTimeout(() => btn.innerHTML = original, 2000);
+            });
+        }
+
+        // --- Model Picker ---
+        async function loadModels() {
+            const sel = document.getElementById('model-select');
+            try {
+                const res = await fetch('/models');
+                const models = await res.json();
+                if (!models.length) throw new Error("empty list");
+                sel.innerHTML = "";
+                models.forEach(m => {
+                    const price = (m.input_price_per_mtok != null)
+                        ? `$${m.input_price_per_mtok}/$${m.output_price_per_mtok} per MTok in/out`
+                        : "pricing unknown";
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = `${m.name} — ${price}`;
+                    sel.appendChild(opt);
+                });
+            } catch (e) {
+                console.error("Failed to load model list", e);
+                sel.innerHTML = `<option value="">Provider default model</option>`;
+            }
+        }
+        loadModels();
+
         // --- Demo Mode Logic ---
         const DEMO_MODE = {{ demo_mode | tojson }};
         let availableScenarios = {};
@@ -534,6 +669,7 @@
             // Reset inputs first
             document.querySelectorAll('.cpt-code').forEach(i => i.value = "");
             document.querySelectorAll('.cpt-units').forEach(i => i.value = "1");
+            document.querySelectorAll('.cpt-mods').forEach(i => i.value = "");
             document.querySelectorAll('.dx').forEach(i => i.value = "");
 
             // Populate CPTs
