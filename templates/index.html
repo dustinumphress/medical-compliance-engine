@@ -47,8 +47,9 @@
                     scrubbing PHI before input.
                 </div>
                 <textarea id="op-report"
-                    placeholder="Paste Operative Report here... (Ensure no PHI is present)"></textarea>
-                <p style="font-size: 0.85em; color: #888; margin-top: 5px; text-align: right;">
+                    placeholder="Paste Operative Report here (text or screenshot images)..."></textarea>
+                <p style="font-size: 0.85em; color: #888; margin-top: 5px; display: flex; justify-content: space-between;">
+                    <span id="transcribe-status"><em>💡 Tip: you can paste screenshot images — they're transcribed by a local model (nothing leaves this PC).</em></span>
                     <em>Please double-check the Redaction Review screen before submitting.</em>
                 </p>
                 {% else %}
@@ -203,6 +204,54 @@
 
         let currentSanitizedText = "";
 
+        // --- Image paste → local transcription ---
+        // Screenshots pasted into the op-report box are sent to /transcribe,
+        // which runs a LOCAL vision model (Ollama) — the image never leaves
+        // this machine. The returned text lands in the textarea and flows
+        // through the normal sanitize/audit pipeline.
+        const opReportBox = document.getElementById('op-report');
+        if (opReportBox && !opReportBox.readOnly) {
+            opReportBox.addEventListener('paste', async (e) => {
+                const items = Array.from(e.clipboardData?.items || []);
+                const imageFiles = items
+                    .filter(it => it.type.startsWith('image/'))
+                    .map(it => it.getAsFile())
+                    .filter(Boolean);
+                if (imageFiles.length === 0) return; // normal text paste
+
+                e.preventDefault();
+                const status = document.getElementById('transcribe-status');
+                status.innerHTML = `<span style="color:#e8b339;">⏳ Transcribing ${imageFiles.length} image(s) locally... (first run loads the model, may take a minute)</span>`;
+                opReportBox.disabled = true;
+
+                try {
+                    const images = await Promise.all(imageFiles.map(f => new Promise((resolve, reject) => {
+                        const r = new FileReader();
+                        r.onload = () => resolve(r.result.split(',')[1]); // strip data-URL prefix
+                        r.onerror = reject;
+                        r.readAsDataURL(f);
+                    })));
+
+                    const res = await fetch('/transcribe', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ images: images })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || 'Transcription failed');
+
+                    const existing = opReportBox.value.trim();
+                    opReportBox.value = existing ? existing + "\n\n" + data.text : data.text;
+                    status.innerHTML = `<span class="success-text">✅ Transcribed locally. Review the text for accuracy before auditing.</span>`;
+                } catch (err) {
+                    console.error(err);
+                    status.innerHTML = `<span class="danger-text">⚠️ ${err.message}</span>`;
+                } finally {
+                    opReportBox.disabled = false;
+                }
+            });
+        }
+
         async function startReview() {
             const text = document.getElementById('op-report').value;
             if (!text.trim()) return alert("Please paste an OP Report.");
@@ -307,6 +356,9 @@
 
         // Global variable to store last audit results for chat context
         let lastAuditResults = null;
+        // Prior Q&A turns on the current audit, sent with each question so
+        // follow-ups like "expand on that" work. Cleared on each new audit.
+        let chatHistory = [];
 
         function parseMarkdown(text) {
             if (!text) return "";
@@ -362,6 +414,7 @@
                         context: document.getElementById('sanitized-view').innerText,
                         audit_results: lastAuditResults,
                         question: question,
+                        history: chatHistory,
                         model: document.getElementById('model-select').value || null
                     })
                 });
@@ -373,6 +426,7 @@
                 if (data.error) {
                     chatBox.innerHTML += `<div class="chat-message agent" style="color:red">Error: ${data.error}</div>`;
                 } else {
+                    chatHistory.push({ question: question, answer: data.answer });
                     const msgId = 'msg-' + Date.now();
                     const formattedDetails = parseMarkdown(data.answer);
 
@@ -398,6 +452,8 @@
 
         function renderResults(data) {
             lastAuditResults = data; // Store FULL object for chat context
+            chatHistory = []; // New audit = fresh conversation
+            document.getElementById('chat-box').innerHTML = "";
             document.getElementById('chat-section').classList.remove('hidden'); // Show chat
 
             if (data.error) {

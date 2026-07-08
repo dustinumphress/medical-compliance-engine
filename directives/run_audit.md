@@ -7,6 +7,12 @@ when needed, draft a payer appeal letter.
 
 ## Inputs
 - Operative report text (PHI is redacted locally by Presidio before any API call)
+  - Can also be pasted as screenshot images (max 4) — transcribed to text by a
+    LOCAL vision model (Ollama `qwen2.5vl:7b`, see `execution/transcribe_image.py`
+    and the `/transcribe` endpoint). Images never leave the machine; the
+    transcribed text then flows through the normal Presidio sanitize step.
+    Requires Ollama running with the model pulled (`ollama pull qwen2.5vl:7b`).
+    Config via `.env`: `OLLAMA_URL`, `OLLAMA_VISION_MODEL`.
 - CPT codes with billed units; modifiers are OPTIONAL (blank = normal claim)
 - ICD-10 diagnosis codes
 - Model choice (UI picker; Sonnet 5 default — see costs below)
@@ -34,6 +40,10 @@ when needed, draft a payer appeal letter.
 - Typical audit cost: ~$0.02–0.05 (Sonnet 5), ~$0.13–0.35 (Fable 5)
 - Appeal letters use placeholders ([PATIENT NAME], [CLAIM NUMBER]) — fill in
   outside the tool; never paste PHI back in
+- "Ask the Auditor" chat is multi-turn: prior Q&A on the same audit is sent
+  with each question (cleared when a new audit runs). The note+findings block
+  is prompt-cached, so follow-ups bill mostly at cache-read rates. The chat
+  uses whatever model is currently selected in the picker, read per-question
 
 ## Outputs
 - Per-code verdict (PASS/FAIL/PARTIAL), evidence quote, calculated vs billed

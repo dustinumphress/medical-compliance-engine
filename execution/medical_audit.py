@@ -124,11 +124,13 @@ def get_llm_client():
         raise ValueError("ANTHROPIC_API_KEY not found in .env file.")
     return anthropic.Anthropic(api_key=ANTHROPIC_API_KEY), MODEL_NAME
 
-def query_anthropic(prompt, system_prompt, output_schema=None, model=None):
+def query_anthropic(prompt, system_prompt, output_schema=None, model=None, messages=None):
     """
     Single LLM entry point for both Bedrock and Anthropic Direct.
     When output_schema is given, structured outputs guarantee the response
     is valid JSON matching the schema. `model` overrides the provider default.
+    Pass `messages` (full alternating-turn list) for multi-turn conversations;
+    otherwise `prompt` is wrapped as a single user message.
     """
     client, default_model = get_llm_client()
     model = model or default_model
@@ -143,7 +145,7 @@ def query_anthropic(prompt, system_prompt, output_schema=None, model=None):
             model=model,
             max_tokens=16000,
             system=system_prompt,
-            messages=[
+            messages=messages if messages is not None else [
                 {"role": "user", "content": prompt}
             ],
             **kwargs,
@@ -712,10 +714,12 @@ def print_human_readable_result(result):
         print(f"METRICS: Input: {in_tok} | Output: {out_tok} | Est. Cost: ${cost:.4f}")
         print("-" * 50)
 
-def consult_auditor(context_text, audit_results, question, model=None):
+def consult_auditor(context_text, audit_results, question, model=None, history=None):
     """
     Follow-up chat with the Auditor Agent.
     Routes through query_anthropic so it works on both Bedrock and the direct API.
+    `history` is a list of {"question": ..., "answer": ...} dicts from prior
+    turns on the same audit, so follow-ups like "expand on that" work.
     """
     # Construct context from the previous audit
     # We want the agent to know what it previously decided.
@@ -724,7 +728,7 @@ def consult_auditor(context_text, audit_results, question, model=None):
     system_prompt = "You are an Expert Medical Auditor Consultant. You have just audited a clinical note. The user has follow-up questions. Answer briefly and professionally based strictly on the text and coding rules."
 
     # The note + findings context is identical across follow-up questions on
-    # the same audit — cache it so only the question is billed at full rate.
+    # the same audit — cache it so only the conversation is billed at full rate.
     context_block = f"""CONTEXT - CLINICAL NOTE:
 \"\"\"
 {context_text}
@@ -733,13 +737,31 @@ def consult_auditor(context_text, audit_results, question, model=None):
 CONTEXT - YOUR PREVIOUS AUDIT FINDINGS:
 {audit_summary}"""
 
-    user_prompt = [
-        {"type": "text", "text": context_block, "cache_control": {"type": "ephemeral"}},
-        {"type": "text", "text": f"USER QUESTION:\n{question}\n\nProvide a helpful, evidence-based answer."},
-    ]
+    # Context goes in the first user turn (stable cache prefix), followed by
+    # alternating prior Q&A turns, then the new question.
+    messages = [{
+        "role": "user",
+        "content": [{"type": "text", "text": context_block, "cache_control": {"type": "ephemeral"}}],
+    }]
+    first = True
+    for turn in (history or []):
+        q, a = (turn.get("question") or "").strip(), (turn.get("answer") or "").strip()
+        if not q or not a:
+            continue
+        if first:
+            messages[0]["content"].append({"type": "text", "text": f"USER QUESTION:\n{q}"})
+            first = False
+        else:
+            messages.append({"role": "user", "content": f"USER QUESTION:\n{q}"})
+        messages.append({"role": "assistant", "content": a})
+    new_q = {"type": "text", "text": f"USER QUESTION:\n{question}\n\nProvide a helpful, evidence-based answer."}
+    if first:
+        messages[0]["content"].append(new_q)
+    else:
+        messages.append({"role": "user", "content": [new_q]})
 
     try:
-        answer_text, _usage = query_anthropic(user_prompt, system_prompt, model=model)
+        answer_text, _usage = query_anthropic(None, system_prompt, model=model, messages=messages)
         if not answer_text:
             raise ValueError("Empty response from LLM")
         return {"answer": answer_text}

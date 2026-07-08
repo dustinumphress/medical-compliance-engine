@@ -99,6 +99,36 @@ def sanitize_endpoint():
         "found_count": len(entities)
     })
 
+@app.route('/transcribe', methods=['POST'])
+def transcribe_endpoint():
+    """
+    Transcribe pasted op-report images to text using the LOCAL vision model
+    (Ollama). Images never leave this machine; the returned text still goes
+    through the normal /sanitize step before any cloud LLM call.
+    Body: {"images": ["<base64>", ...]}
+    """
+    if DEMO_MODE:
+        return jsonify({"error": "Image transcription is disabled in Demo Mode."}), 403
+
+    from execution.transcribe_image import transcribe_images, is_available, OLLAMA_VISION_MODEL
+
+    data = request.json
+    images = data.get('images', [])
+    if not images:
+        return jsonify({"error": "No images provided"}), 400
+    if len(images) > 4:
+        return jsonify({"error": "Maximum 4 images per transcription"}), 400
+
+    if not is_available():
+        return jsonify({"error": f"Local vision model unavailable. Is Ollama running with '{OLLAMA_VISION_MODEL}' pulled? (ollama pull {OLLAMA_VISION_MODEL})"}), 503
+
+    try:
+        text = transcribe_images(images)
+        return jsonify({"text": text})
+    except Exception as e:
+        app.logger.error(f"Transcription failed: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/audit', methods=['POST'])
 def audit_endpoint():
     data = request.json
@@ -182,7 +212,9 @@ def chat_endpoint():
         else:
             return jsonify({"answer": "I am running in Demo Mode to prevent API abuse. Please select one of the suggested questions above."})
 
-    response = consult_auditor(context, results, question, model=data.get('model') or None)
+    response = consult_auditor(context, results, question,
+                               model=data.get('model') or None,
+                               history=data.get('history') or [])
     return jsonify(response)
 
 if __name__ == '__main__':
