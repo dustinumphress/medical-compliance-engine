@@ -99,6 +99,16 @@ def sanitize_endpoint():
         "found_count": len(entities)
     })
 
+@app.route('/transcribe/warm', methods=['POST'])
+def transcribe_warm_endpoint():
+    """Fire-and-forget model preload, called when the UI opens."""
+    if DEMO_MODE:
+        return jsonify({"ok": False}), 403
+    import threading
+    from execution.transcribe_image import warm_model
+    threading.Thread(target=warm_model, daemon=True).start()
+    return jsonify({"ok": True})
+
 @app.route('/transcribe', methods=['POST'])
 def transcribe_endpoint():
     """

@@ -41,6 +41,23 @@ def is_available():
         return False
 
 
+def warm_model():
+    """
+    Load the vision model into VRAM without running inference (empty messages
+    = load-only in Ollama). Called when the UI opens so the ~90s load cost is
+    paid before the user pastes an image. Errors are non-fatal.
+    """
+    try:
+        requests.post(
+            f"{OLLAMA_URL}/api/chat",
+            json={"model": OLLAMA_VISION_MODEL, "messages": [], "keep_alive": "30m"},
+            timeout=180,
+        )
+        logger.info(f"Vision model {OLLAMA_VISION_MODEL} warmed")
+    except Exception as e:
+        logger.warning(f"Vision model warmup failed (non-fatal): {e}")
+
+
 def transcribe_images(images_b64):
     """
     Transcribe a list of base64-encoded images (data-URL prefix stripped)
@@ -62,9 +79,14 @@ def transcribe_images(images_b64):
                     "images": [img],
                 }],
                 "stream": False,
-                "options": {"temperature": 0},
+                # num_ctx: a full-page image is ~4K tokens by itself, and the
+                # transcription needs room too — Ollama's 4096 default silently
+                # truncates the output (done_reason: length).
+                "options": {"temperature": 0, "num_ctx": 16384},
+                # Keep the model in VRAM between pastes — reloading costs ~90s
+                "keep_alive": "30m",
             },
-            timeout=300,  # first call loads the model into VRAM, which is slow
+            timeout=600,  # first call loads the model into VRAM, which is slow
         )
         resp.raise_for_status()
         pages.append(resp.json()["message"]["content"].strip())

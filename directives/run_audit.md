@@ -40,6 +40,16 @@ when needed, draft a payer appeal letter.
 - Typical audit cost: ~$0.02–0.05 (Sonnet 5), ~$0.13–0.35 (Fable 5)
 - Appeal letters use placeholders ([PATIENT NAME], [CLAIM NUMBER]) — fill in
   outside the tool; never paste PHI back in
+- Image transcription gotchas (learned 2026-07-08):
+  - Ollama 0.30.x failed GPU discovery on this machine → model ran 100% CPU
+    → 300s timeouts. Requires Ollama >= 0.31.1 (verify with `ollama ps`
+    showing "100% GPU" while loaded)
+  - A full-page image is ~4K tokens by itself; Ollama's default 4096 num_ctx
+    silently truncates output (done_reason: length). We pass num_ctx=16384
+  - UI downscales pastes to 1600px long edge before sending; the model is
+    kept in VRAM 30 min (keep_alive) and pre-warmed when the page opens
+  - Expected speed: ~35s per full page on the RTX 3080, a few seconds for
+    small crops; first paste after 30+ min idle re-pays the ~90s model load
 - "Ask the Auditor" chat is multi-turn: prior Q&A on the same audit is sent
   with each question (cleared when a new audit runs). The note+findings block
   is prompt-cached, so follow-ups bill mostly at cache-read rates. The chat

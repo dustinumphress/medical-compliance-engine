@@ -211,6 +211,9 @@
         // through the normal sanitize/audit pipeline.
         const opReportBox = document.getElementById('op-report');
         if (opReportBox && !opReportBox.readOnly) {
+            // Preload the local vision model so the first paste doesn't pay
+            // the ~90s VRAM load. Fire-and-forget; server ignores failures.
+            fetch('/transcribe/warm', { method: 'POST' }).catch(() => {});
             opReportBox.addEventListener('paste', async (e) => {
                 const items = Array.from(e.clipboardData?.items || []);
                 const imageFiles = items
@@ -224,13 +227,25 @@
                 status.innerHTML = `<span style="color:#e8b339;">⏳ Transcribing ${imageFiles.length} image(s) locally... (first run loads the model, may take a minute)</span>`;
                 opReportBox.disabled = true;
 
+                // Downscale before sending: the vision model's processing time
+                // scales with pixel count, and full-res screenshots time out on
+                // consumer GPUs. ~1600px on the long edge keeps text legible.
+                const MAX_EDGE = 1600;
+                async function toResizedB64(file) {
+                    const bmp = await createImageBitmap(file);
+                    const scale = Math.min(1, MAX_EDGE / Math.max(bmp.width, bmp.height));
+                    const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w; canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    ctx.imageSmoothingQuality = 'high';
+                    ctx.drawImage(bmp, 0, 0, w, h);
+                    bmp.close();
+                    return canvas.toDataURL('image/png').split(',')[1];
+                }
+
                 try {
-                    const images = await Promise.all(imageFiles.map(f => new Promise((resolve, reject) => {
-                        const r = new FileReader();
-                        r.onload = () => resolve(r.result.split(',')[1]); // strip data-URL prefix
-                        r.onerror = reject;
-                        r.readAsDataURL(f);
-                    })));
+                    const images = await Promise.all(imageFiles.map(toResizedB64));
 
                     const res = await fetch('/transcribe', {
                         method: 'POST',
