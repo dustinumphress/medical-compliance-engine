@@ -48,6 +48,15 @@ when needed, draft a payer appeal letter.
     silently truncates output (done_reason: length). We pass num_ctx=16384
   - UI downscales pastes to 1600px long edge before sending; the model is
     kept in VRAM 30 min (keep_alive) and pre-warmed when the page opens
+  - Docker path only (learned 2026-08-03): inside the container `localhost`
+    is the container itself, so the default `OLLAMA_URL=http://localhost:11434`
+    can never reach the host's Ollama → "local model unavailable" even when
+    Ollama is running fine. `run_app.ps1` now passes
+    `OLLAMA_URL=http://host.docker.internal:11434` plus
+    `--add-host=host.docker.internal:host-gateway`. Running bare-metal
+    (`python app.py`) needs neither. `run_app.ps1` also starts `ollama serve`
+    and pulls the vision model if missing, then continues without
+    transcription if Ollama is absent (text paste still works).
   - Expected speed: ~35s per full page on the RTX 3080, a few seconds for
     small crops; first paste after 30+ min idle re-pays the ~90s model load
 - "Ask the Auditor" chat is multi-turn: prior Q&A on the same audit is sent

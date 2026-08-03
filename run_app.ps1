@@ -37,6 +37,58 @@ else {
     Write-Host "✅ Docker is running."
 }
 
+Write-Host "🦙 Checking Ollama (local vision model for image transcription)..."
+$visionModel = "qwen2.5vl:7b"
+$ollamaOk = $false
+
+# Is the Ollama server already listening?
+try {
+    Invoke-RestMethod -Uri "http://localhost:11434/api/tags" -TimeoutSec 3 | Out-Null
+    $ollamaOk = $true
+    Write-Host "✅ Ollama is running."
+}
+catch {
+    if (Get-Command ollama -ErrorAction SilentlyContinue) {
+        Write-Host "   -> Starting Ollama server..."
+        Start-Process -FilePath "ollama" -ArgumentList "serve" -WindowStyle Hidden
+        $retries = 15
+        while ($retries -gt 0) {
+            Start-Sleep -Seconds 2
+            try {
+                Invoke-RestMethod -Uri "http://localhost:11434/api/tags" -TimeoutSec 3 | Out-Null
+                $ollamaOk = $true
+                Write-Host "✅ Ollama is ready!"
+                break
+            }
+            catch { Write-Host -NoNewline "." }
+            $retries--
+        }
+    }
+    else {
+        Write-Host "⚠️ Ollama is not installed. Image transcription will be unavailable."
+    }
+}
+
+# Make sure the vision model is actually pulled (6 GB - only downloads once)
+if ($ollamaOk) {
+    $tags = Invoke-RestMethod -Uri "http://localhost:11434/api/tags" -TimeoutSec 5
+    if (-not ($tags.models.name -contains $visionModel)) {
+        Write-Host "   -> Vision model '$visionModel' not found. Pulling (~6 GB, one time)..."
+        ollama pull $visionModel
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "⚠️ Pull failed. Image transcription will be unavailable."
+            $ollamaOk = $false
+        }
+    }
+    else {
+        Write-Host "✅ Vision model '$visionModel' is available."
+    }
+}
+
+if (-not $ollamaOk) {
+    Write-Host "⚠️ Continuing without local transcription - text paste still works."
+}
+
 Write-Host "�� Cleaning up old instances..."
 # Stop Python if running
 Stop-Process -Name "python" -Force -ErrorAction SilentlyContinue
@@ -57,5 +109,14 @@ Write-Host "🚀 Starting Application..."
 Write-Host "   -> Access at http://localhost:5000"
 Write-Host "   -> Press Ctrl+C to stop"
 
-# Run with --rm (auto-delete on exit) and --name (easy to identify)
-docker run --rm --name medical-audit --env-file .env -p 5000:5000 medical-audit
+# Run with --rm (auto-delete on exit) and --name (easy to identify).
+# OLLAMA_URL must point at the HOST, not the container: inside the container
+# "localhost" is the container itself, so the default localhost:11434 never
+# reaches the Ollama server running on this machine. host.docker.internal is
+# mapped explicitly via --add-host so this works on Docker Engine too, not
+# just Docker Desktop.
+docker run --rm --name medical-audit `
+    --env-file .env `
+    -e OLLAMA_URL="http://host.docker.internal:11434" `
+    --add-host=host.docker.internal:host-gateway `
+    -p 5000:5000 medical-audit
